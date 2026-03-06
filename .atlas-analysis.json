@@ -1,0 +1,129 @@
+{
+  "projectType": "api-service",
+  "projectName": "Renta Pelis Backend",
+  "projectDescription": "A NestJS-based REST API for a movie rental and purchase platform with authentication, role-based access control, and order management.",
+  "theme": "aspen",
+  "primaryColor": "#de2850",
+  "lightColor": "#e08cac",
+  "darkColor": null,
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Authentication",
+            "pages": [
+              "auth/overview",
+              "auth/jwt-tokens",
+              "auth/sessions",
+              "auth/two-factor"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/database-schema",
+              "concepts/role-based-access",
+              "concepts/error-handling"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Authentication",
+            "pages": [
+              "api/auth/register",
+              "api/auth/login",
+              "api/auth/profile"
+            ]
+          },
+          {
+            "group": "Movies",
+            "pages": [
+              "api/movies/list-movies",
+              "api/movies/get-movie",
+              "api/movies/create-movie",
+              "api/movies/update-movie",
+              "api/movies/delete-movie"
+            ]
+          },
+          {
+            "group": "Orders",
+            "pages": [
+              "api/orders/create-order",
+              "api/orders/list-orders",
+              "api/orders/get-order",
+              "api/orders/my-orders",
+              "api/orders/delete-order"
+            ]
+          },
+          {
+            "group": "Users",
+            "pages": [
+              "api/users/list-users",
+              "api/users/get-user",
+              "api/users/create-user",
+              "api/users/update-user",
+              "api/users/delete-user"
+            ]
+          },
+          {
+            "group": "Sessions",
+            "pages": [
+              "api/sessions/create-session",
+              "api/sessions/list-sessions",
+              "api/sessions/update-session",
+              "api/sessions/delete-session"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "JWT-based authentication with refresh tokens",
+    "Role-based access control (Admin/Client)",
+    "Two-factor authentication support",
+    "Movie rental and purchase system with pricing tiers",
+    "Order management with status tracking",
+    "Session management with device tracking",
+    "PostgreSQL database with Prisma ORM",
+    "Swagger/OpenAPI documentation"
+  ],
+  "publicApiSurface": [
+    "POST /auth/register",
+    "POST /auth/login",
+    "GET /auth/profile",
+    "GET /movies",
+    "GET /movies/:id",
+    "POST /movies",
+    "PATCH /movies/:id",
+    "DELETE /movies/:id",
+    "POST /orders",
+    "GET /orders",
+    "GET /orders/:id",
+    "GET /orders/my-orders",
+    "DELETE /orders/:id",
+    "GET /users",
+    "GET /users/:id",
+    "POST /users",
+    "PATCH /users/:id",
+    "DELETE /users/:id",
+    "POST /sessions",
+    "GET /sessions/:id",
+    "PATCH /sessions/:id",
+    "DELETE /sessions/:id"
+  ]
+}
