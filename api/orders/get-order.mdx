@@ -1,0 +1,171 @@
+---
+title: "Get Order Details"
+api: "GET /orders/:id"
+description: "Retrieve details of a specific order"
+---
+
+## Authentication
+
+This endpoint requires:
+- **Bearer Token**: Valid JWT access token
+- **Role**: `Client` role required
+- **Ownership**: User must own the order (enforced by OwnershipGuard)
+
+<Warning>
+Users can only access their own orders. Attempting to access another user's order will result in a 403 Forbidden error.
+</Warning>
+
+## Path Parameters
+
+<ParamField path="id" type="string" required>
+  The unique order ID (UUID format)
+</ParamField>
+
+## Response
+
+<ResponseField name="orderId" type="string">
+  Unique identifier for the order (UUID format)
+</ResponseField>
+
+<ResponseField name="userId" type="string">
+  ID of the user who created the order
+</ResponseField>
+
+<ResponseField name="totalAmount" type="number">
+  Total cost of the order
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Current order status: `PENDING`, `PAID`, `CANCELED`, or `REFUNDED`
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 timestamp when the order was created
+</ResponseField>
+
+<ResponseField name="updatedAt" type="string">
+  ISO 8601 timestamp when the order was last updated
+</ResponseField>
+
+<ResponseField name="items" type="array">
+  Array of order items
+  
+  <ResponseField name="id" type="string">
+    Unique identifier for the order item
+  </ResponseField>
+  
+  <ResponseField name="orderId" type="string">
+    Reference to the parent order
+  </ResponseField>
+  
+  <ResponseField name="imdbId" type="string">
+    IMDB ID of the movie
+  </ResponseField>
+  
+  <ResponseField name="price" type="number">
+    Price of the item at the time of order creation
+  </ResponseField>
+  
+  <ResponseField name="movie" type="object">
+    Movie details
+    
+    <ResponseField name="title" type="string">
+      Movie title
+    </ResponseField>
+    
+    <ResponseField name="poster" type="string">
+      URL to the movie poster image
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+## Example Request
+
+```bash
+GET /orders/550e8400-e29b-41d4-a716-446655440000
+```
+
+## Example Response
+
+```json
+{
+  "orderId": "550e8400-e29b-41d4-a716-446655440000",
+  "userId": "123e4567-e89b-12d3-a456-426614174000",
+  "totalAmount": 24.99,
+  "status": "PAID",
+  "createdAt": "2026-03-06T10:30:00.000Z",
+  "updatedAt": "2026-03-06T11:00:00.000Z",
+  "items": [
+    {
+      "id": "660e8400-e29b-41d4-a716-446655440001",
+      "orderId": "550e8400-e29b-41d4-a716-446655440000",
+      "imdbId": "tt0111161",
+      "price": 4.99,
+      "movie": {
+        "title": "The Shawshank Redemption",
+        "poster": "https://example.com/posters/tt0111161.jpg"
+      }
+    },
+    {
+      "id": "660e8400-e29b-41d4-a716-446655440002",
+      "orderId": "550e8400-e29b-41d4-a716-446655440000",
+      "imdbId": "tt0068646",
+      "price": 19.99,
+      "movie": {
+        "title": "The Godfather",
+        "poster": "https://example.com/posters/tt0068646.jpg"
+      }
+    }
+  ]
+}
+```
+
+## Ownership Validation
+
+The `OwnershipGuard` enforces that users can only access their own orders by:
+
+1. Extracting the order ID from the URL path parameter
+2. Fetching the order from the database
+3. Comparing the order's `userId` with the authenticated user's ID
+4. Returning 403 Forbidden if the IDs don't match
+
+This ensures data privacy and prevents users from accessing orders they don't own.
+
+## Error Responses
+
+<ResponseField name="401 Unauthorized" type="error">
+  Returned when the access token is missing or invalid
+  
+  ```json
+  {
+    "statusCode": 401,
+    "message": "Unauthorized"
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="403 Forbidden" type="error">
+  Returned when:
+  - User does not have the `Client` role
+  - User attempts to access an order they don't own
+  
+  ```json
+  {
+    "statusCode": 403,
+    "message": "No tienes permiso sobre este recurso",
+    "error": "Forbidden"
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="404 Not Found" type="error">
+  Returned when the order ID does not exist
+  
+  ```json
+  {
+    "statusCode": 404,
+    "message": "Orden #550e8400-e29b-41d4-a716-446655440000 no encontrada",
+    "error": "Not Found"
+  }
+  ```
+</ResponseField>

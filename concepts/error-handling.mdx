@@ -1,0 +1,418 @@
+---
+title: 'Error Handling'
+description: 'Learn how errors are handled and returned in the Renta Pelis API'
+---
+
+The Renta Pelis Backend uses **NestJS's built-in exception handling** combined with **class-validator** for input validation. All errors return consistent JSON responses with appropriate HTTP status codes.
+
+## Error Response Format
+
+All errors follow the standard NestJS exception format:
+
+```json
+{
+  "statusCode": 400,
+  "message": "Validation failed",
+  "error": "Bad Request"
+}
+```
+
+For validation errors with multiple fields:
+
+```json
+{
+  "statusCode": 400,
+  "message": [
+    "email must be an email",
+    "password must be longer than or equal to 8 characters"
+  ],
+  "error": "Bad Request"
+}
+```
+
+## HTTP Status Codes
+
+The API uses standard HTTP status codes to indicate success or failure:
+
+| Status Code | Meaning | Common Use Cases |
+|-------------|---------|------------------|
+| `200` | OK | Successful GET, PATCH, DELETE requests |
+| `201` | Created | Successful POST requests that create resources |
+| `400` | Bad Request | Invalid input data, validation errors |
+| `401` | Unauthorized | Missing or invalid authentication token |
+| `403` | Forbidden | Insufficient permissions, ownership violations |
+| `404` | Not Found | Resource doesn't exist |
+| `409` | Conflict | Duplicate email, unique constraint violations |
+| `500` | Internal Server Error | Unexpected server errors |
+
+## Validation Errors
+
+The API uses **class-validator** decorators for automatic input validation. Global validation is enabled in `main.ts`:
+
+```typescript
+// src/main.ts
+import { ValidationPipe } from '@nestjs/common';
+
+app.useGlobalPipes(
+  new ValidationPipe({
+    whitelist: true,              // Remove unknown properties
+    forbidNonWhitelisted: true,   // Throw error if unknown properties exist
+    transform: true,              // Auto-transform payloads to DTO types
+  }),
+);
+```
+
+### Configuration Options
+
+- **`whitelist: true`**: Strips properties that don't have decorators in the DTO
+- **`forbidNonWhitelisted: true`**: Returns a 400 error if extra properties are sent
+- **`transform: true`**: Automatically converts request payloads to the DTO class instances
+
+### DTO Validation Example
+
+Here's how validation works with the `RegisterDto`:
+
+```typescript
+// src/auth/dto/register.dto.ts
+import {
+  IsString,
+  MinLength,
+  IsEmail,
+  IsNotEmpty,
+  IsEnum,
+  IsOptional,
+  IsPhoneNumber,
+} from 'class-validator';
+import { Transform } from 'class-transformer';
+import { AuthProviderEnum, UserRole } from '../../generated/prisma/enums';
+
+export class RegisterDto {
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(2)
+  name: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MinLength(2)
+  lastName: string;
+
+  @IsNotEmpty({ message: 'El email es requerido' })
+  @IsEmail({}, { message: 'El formato del email no es válido' })
+  @Transform(({ value }: { value: string }) => value?.trim().toLowerCase())
+  email: string;
+
+  @IsString()
+  @MinLength(8)
+  password: string;
+
+  @IsPhoneNumber()
+  @MinLength(10)
+  phone: string;
+
+  @IsString()
+  country: string;
+
+  @IsString()
+  language: string;
+
+  @IsString()
+  authProvider: AuthProviderEnum;
+  
+  @IsEnum(UserRole)
+  @IsOptional()
+  role?: UserRole;
+}
+```
+
+### Validation Error Examples
+
+**Request with invalid email:**
+
+```bash
+POST /auth/register
+{
+  "email": "invalid-email",
+  "password": "short"
+}
+```
+
+**Response:**
+
+```json
+{
+  "statusCode": 400,
+  "message": [
+    "El formato del email no es válido",
+    "password must be longer than or equal to 8 characters",
+    "name should not be empty",
+    "lastName should not be empty"
+  ],
+  "error": "Bad Request"
+}
+```
+
+**Request with extra fields:**
+
+```bash
+POST /auth/register
+{
+  "email": "user@example.com",
+  "password": "password123",
+  "unknownField": "value"
+}
+```
+
+**Response:**
+
+```json
+{
+  "statusCode": 400,
+  "message": [
+    "property unknownField should not exist"
+  ],
+  "error": "Bad Request"
+}
+```
+
+## Authentication Errors
+
+The `AuthGuard` throws authentication-related exceptions:
+
+### 401 Unauthorized - Missing Token
+
+**Error:**
+```typescript
+throw new UnauthorizedException('Token no proporcionado');
+```
+
+**Response:**
+```json
+{
+  "statusCode": 401,
+  "message": "Token no proporcionado",
+  "error": "Unauthorized"
+}
+```
+
+### 401 Unauthorized - Invalid Token
+
+**Error:**
+```typescript
+throw new UnauthorizedException();
+```
+
+**Response:**
+```json
+{
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized"
+}
+```
+
+<Info>
+**When this occurs:**
+- Token signature is invalid
+- Token has expired
+- Token format is malformed
+</Info>
+
+## Authorization Errors
+
+### 403 Forbidden - Insufficient Role
+
+When a user without the required role tries to access a protected route:
+
+**Example:**
+```bash
+GET /users
+Authorization: Bearer <client-token>
+```
+
+**Response:**
+```json
+{
+  "statusCode": 403,
+  "message": "Forbidden resource",
+  "error": "Forbidden"
+}
+```
+
+<Warning>
+The `RolesGuard` silently denies access by returning `false`. NestJS automatically converts this to a 403 Forbidden response.
+</Warning>
+
+### 403 Forbidden - Ownership Violation
+
+When a user tries to access another user's resource:
+
+```typescript
+// src/orders/guards/ownership.guard.ts
+if (resource.userId !== user.sub) {
+  throw new ForbiddenException('No tienes permiso sobre este recurso');
+}
+```
+
+**Response:**
+```json
+{
+  "statusCode": 403,
+  "message": "No tienes permiso sobre este recurso",
+  "error": "Forbidden"
+}
+```
+
+## Resource Not Found Errors
+
+### 404 Not Found
+
+Thrown by guards or services when a resource doesn't exist:
+
+```typescript
+if (!resource) {
+  throw new NotFoundException('Recurso no encontrado');
+}
+```
+
+**Response:**
+```json
+{
+  "statusCode": 404,
+  "message": "Recurso no encontrado",
+  "error": "Not Found"
+}
+```
+
+## Common Validation Decorators
+
+The API uses these **class-validator** decorators extensively:
+
+| Decorator | Purpose | Example Error |
+|-----------|---------|---------------|
+| `@IsString()` | Must be a string | "name must be a string" |
+| `@IsEmail()` | Must be valid email | "email must be an email" |
+| `@IsNotEmpty()` | Cannot be empty | "password should not be empty" |
+| `@MinLength(n)` | Minimum length | "password must be longer than or equal to 8 characters" |
+| `@IsEnum(Enum)` | Must match enum value | "role must be a valid enum value" |
+| `@IsPhoneNumber()` | Must be valid phone | "phone must be a valid phone number" |
+| `@IsOptional()` | Field is optional | N/A (allows undefined) |
+
+## Database Constraint Errors
+
+### Unique Constraint Violations
+
+When trying to create a user with an existing email:
+
+**Prisma Error:**
+```
+PrismaClientKnownRequestError: Unique constraint failed on the fields: (`email`)
+```
+
+**Typical Service Handling:**
+```typescript
+try {
+  await this.prisma.user.create({ data: userData });
+} catch (error) {
+  if (error.code === 'P2002') {
+    throw new ConflictException('El email ya está registrado');
+  }
+  throw error;
+}
+```
+
+**Response:**
+```json
+{
+  "statusCode": 409,
+  "message": "El email ya está registrado",
+  "error": "Conflict"
+}
+```
+
+## Error Handling Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use specific exception types">
+    Use `BadRequestException`, `UnauthorizedException`, `NotFoundException`, etc. instead of generic exceptions.
+  </Accordion>
+
+  <Accordion title="Provide clear error messages">
+    Error messages should help developers understand what went wrong. Avoid exposing sensitive system details.
+  </Accordion>
+
+  <Accordion title="Handle Prisma errors gracefully">
+    Catch Prisma errors and convert them to appropriate HTTP exceptions (e.g., P2002 → ConflictException).
+  </Accordion>
+
+  <Accordion title="Use validation decorators consistently">
+    Apply decorators to all DTO properties to ensure consistent validation across the API.
+  </Accordion>
+
+  <Accordion title="Test error scenarios">
+    Write tests for error cases to ensure proper status codes and messages are returned.
+  </Accordion>
+</AccordionGroup>
+
+## Custom Error Messages
+
+You can customize validation messages using the `message` option:
+
+```typescript
+@IsEmail({}, { message: 'El formato del email no es válido' })
+email: string;
+
+@IsNotEmpty({ message: 'El email es requerido' })
+email: string;
+```
+
+## Handling Async Validation
+
+For custom validation that requires database lookups, create custom validators:
+
+```typescript
+import { ValidatorConstraint, ValidatorConstraintInterface } from 'class-validator';
+
+@ValidatorConstraint({ async: true })
+export class IsEmailUniqueConstraint implements ValidatorConstraintInterface {
+  constructor(private usersService: UsersService) {}
+
+  async validate(email: string): Promise<boolean> {
+    const user = await this.usersService.findByEmail(email);
+    return !user; // Returns false if user exists
+  }
+
+  defaultMessage(): string {
+    return 'Email already exists';
+  }
+}
+```
+
+## CORS Errors
+
+The API is configured with CORS in `main.ts`:
+
+```typescript
+app.enableCors({
+  origin: process.env.ALLOWED_ORIGINS?.split(',') || [],
+  credentials: true,
+  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+  allowedHeaders: 'Content-Type, Accept, Authorization',
+});
+```
+
+If you encounter CORS errors, ensure:
+1. Your domain is listed in `ALLOWED_ORIGINS` environment variable
+2. Requests include `Authorization` header in allowed headers
+3. Credentials are properly configured if using cookies
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Database Schema" icon="database" href="/concepts/database-schema">
+    Learn about data models and constraints
+  </Card>
+  <Card title="Authentication Guide" icon="lock" href="/auth/overview">
+    Learn about authentication and authorization
+  </Card>
+</CardGroup>

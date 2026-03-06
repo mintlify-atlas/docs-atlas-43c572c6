@@ -1,0 +1,161 @@
+---
+title: "Delete Order"
+api: "DELETE /orders/:id"
+description: "Delete a specific order"
+---
+
+## Authentication
+
+This endpoint requires:
+- **Bearer Token**: Valid JWT access token
+- **Ownership**: User must own the order (enforced by OwnershipGuard)
+
+<Warning>
+This endpoint permanently deletes an order and all associated order items. This action cannot be undone. Users can only delete their own orders.
+</Warning>
+
+## Path Parameters
+
+<ParamField path="id" type="string" required>
+  The unique order ID (UUID format) to delete
+</ParamField>
+
+## Response
+
+Returns the deleted order object.
+
+<ResponseField name="orderId" type="string">
+  Unique identifier of the deleted order
+</ResponseField>
+
+<ResponseField name="userId" type="string">
+  ID of the user who owned the order
+</ResponseField>
+
+<ResponseField name="totalAmount" type="number">
+  Total cost of the deleted order
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Status of the order at the time of deletion
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 timestamp when the order was created
+</ResponseField>
+
+<ResponseField name="updatedAt" type="string">
+  ISO 8601 timestamp when the order was last updated
+</ResponseField>
+
+## Example Request
+
+```bash
+DELETE /orders/550e8400-e29b-41d4-a716-446655440000
+```
+
+## Example Response
+
+```json
+{
+  "orderId": "550e8400-e29b-41d4-a716-446655440000",
+  "userId": "123e4567-e89b-12d3-a456-426614174000",
+  "totalAmount": 24.99,
+  "status": "CANCELED",
+  "createdAt": "2026-03-06T10:30:00.000Z",
+  "updatedAt": "2026-03-06T10:35:00.000Z"
+}
+```
+
+## Behavior
+
+- The order and all associated order items are permanently deleted from the database
+- Deletion is cascading, so all related `OrderItem` records are automatically removed
+- The OwnershipGuard validates that the authenticated user owns the order before allowing deletion
+- The operation is atomic and will fully succeed or fully fail
+
+## Ownership Validation
+
+The `OwnershipGuard` enforces that users can only delete their own orders by:
+
+1. Extracting the order ID from the URL path parameter
+2. Fetching the order from the database
+3. Comparing the order's `userId` with the authenticated user's ID
+4. Returning 403 Forbidden if the IDs don't match
+5. Allowing the deletion to proceed if ownership is confirmed
+
+## Use Cases
+
+This endpoint is typically used for:
+- Allowing users to cancel pending orders
+- Removing test or accidental orders
+- Administrative cleanup (when called by an admin)
+
+<Info>
+Consider implementing order status transitions (e.g., PENDING → CANCELED) instead of hard deletion for better audit trails and reporting. The current implementation performs a hard delete.
+</Info>
+
+## Database Cascade Behavior
+
+When an order is deleted:
+
+```prisma
+model Order {
+  // ...
+  items OrderItem[] // Child items are cascade deleted
+}
+
+model OrderItem {
+  // ...
+  order Order @relation(fields: [orderId], references: [orderId], onDelete: Cascade)
+}
+```
+
+All `OrderItem` records referencing the deleted order are automatically removed due to the `onDelete: Cascade` directive in the Prisma schema.
+
+## Error Responses
+
+<ResponseField name="401 Unauthorized" type="error">
+  Returned when the access token is missing or invalid
+  
+  ```json
+  {
+    "statusCode": 401,
+    "message": "Unauthorized"
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="403 Forbidden" type="error">
+  Returned when the user attempts to delete an order they don't own
+  
+  ```json
+  {
+    "statusCode": 403,
+    "message": "No tienes permiso sobre este recurso",
+    "error": "Forbidden"
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="404 Not Found" type="error">
+  Returned when:
+  - The order ID does not exist
+  - The order was already deleted
+  
+  ```json
+  {
+    "statusCode": 404,
+    "message": "Orden #550e8400-e29b-41d4-a716-446655440000 no encontrada",
+    "error": "Not Found"
+  }
+  ```
+</ResponseField>
+
+## Best Practices
+
+- Always verify the order status before deletion
+- Consider implementing soft deletes for orders with status `PAID` or `REFUNDED` to maintain financial records
+- Log deletion events for audit purposes
+- Inform users about the permanent nature of this action
+- Consider requiring additional confirmation for paid orders

@@ -1,0 +1,191 @@
+---
+title: "Get User Profile"
+api: "GET /auth/profile"
+description: "Retrieve the authenticated user's profile information"
+---
+
+## Authentication
+
+**Required.** This endpoint requires a valid JWT access token.
+
+Include the token in the `Authorization` header:
+
+```
+Authorization: Bearer YOUR_ACCESS_TOKEN
+```
+
+## Request
+
+No request body or query parameters required. The user information is extracted from the JWT token.
+
+## Response
+
+<ResponseField name="id" type="string">
+  Unique user identifier.
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  User's email address.
+</ResponseField>
+
+<ResponseField name="role" type="string">
+  User's role. Possible values:
+  - `admin` - Administrator role
+  - `cliente` - Client/customer role
+</ResponseField>
+
+## Example Request
+
+<CodeGroup>
+
+```bash cURL
+curl -X GET https://api.rentapelis.com/auth/profile \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+```javascript JavaScript
+const accessToken = localStorage.getItem('accessToken');
+
+const response = await fetch('https://api.rentapelis.com/auth/profile', {
+  method: 'GET',
+  headers: {
+    'Authorization': `Bearer ${accessToken}`
+  }
+});
+
+const profile = await response.json();
+console.log(profile);
+```
+
+```python Python
+import requests
+
+access_token = 'YOUR_ACCESS_TOKEN'
+
+response = requests.get(
+    'https://api.rentapelis.com/auth/profile',
+    headers={
+        'Authorization': f'Bearer {access_token}'
+    }
+)
+
+profile = response.json()
+print(profile)
+```
+
+```typescript TypeScript
+interface UserProfile {
+  id: string;
+  email: string;
+  role: 'admin' | 'cliente';
+}
+
+const getProfile = async (token: string): Promise<UserProfile> => {
+  const response = await fetch('https://api.rentapelis.com/auth/profile', {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  });
+  
+  if (!response.ok) {
+    throw new Error('Failed to fetch profile');
+  }
+  
+  return response.json();
+};
+
+// Usage
+const profile = await getProfile(accessToken);
+console.log(`Welcome ${profile.email}!`);
+```
+
+</CodeGroup>
+
+## Example Response
+
+<CodeGroup>
+
+```json 200 Success - Cliente
+{
+  "id": "648ec48f-1234-4567-890a-bcdef0123456",
+  "email": "juan.perez@example.com",
+  "role": "cliente"
+}
+```
+
+```json 200 Success - Admin
+{
+  "id": "748fc59e-5678-9012-345a-cdef67890123",
+  "email": "admin@rentapelis.com",
+  "role": "admin"
+}
+```
+
+```json 401 Unauthorized - Missing Token
+{
+  "statusCode": 401,
+  "message": "Unauthorized",
+  "error": "Unauthorized"
+}
+```
+
+```json 401 Unauthorized - Invalid Token
+{
+  "statusCode": 401,
+  "message": "Invalid token",
+  "error": "Unauthorized"
+}
+```
+
+```json 401 Unauthorized - User Not Found
+{
+  "statusCode": 401,
+  "message": "Usuario no encontrado",
+  "error": "Unauthorized"
+}
+```
+
+```json 401 Unauthorized - Expired Token
+{
+  "statusCode": 401,
+  "message": "Token has expired",
+  "error": "Unauthorized"
+}
+```
+
+</CodeGroup>
+
+## Error Codes
+
+| Status Code | Description |
+|-------------|-------------|
+| 200 | Profile successfully retrieved |
+| 401 | Unauthorized - Missing, invalid, or expired token |
+| 500 | Internal Server Error |
+
+## Authorization Flow
+
+1. User logs in via `/auth/login` or registers via `/auth/register`
+2. Server returns an `access_token`
+3. Client stores the token securely
+4. Client includes token in `Authorization` header for protected routes
+5. Server validates token and extracts user information from JWT payload
+6. Server returns user profile data
+
+## Security Notes
+
+- Always use HTTPS in production to prevent token interception
+- Store tokens securely (avoid localStorage in high-security applications)
+- Implement token refresh mechanism for long-lived sessions
+- Tokens contain minimal user information (id, email, role) for security
+- The token is validated by the `AuthGuard` middleware before processing the request
+- If the token is invalid or expired, the request will be rejected with a 401 error
+
+## Use Cases
+
+- Displaying user information in the UI
+- Checking user role for conditional rendering
+- Validating authentication state
+- Fetching user data after login/registration
+- Role-based access control (RBAC) checks

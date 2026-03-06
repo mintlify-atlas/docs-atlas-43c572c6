@@ -1,0 +1,363 @@
+---
+title: 'Database Schema'
+description: 'Complete overview of the Renta Pelis database structure using Prisma ORM'
+---
+
+The Renta Pelis Backend uses **Prisma ORM** with PostgreSQL to manage the database layer. This page documents all models, relationships, and constraints defined in the schema.
+
+## Core Models
+
+### User Model
+
+The `User` model represents registered users on the platform, including both customers and administrators.
+
+```prisma
+model User {
+  user_id      String     @id @default(uuid())
+  name         String
+  lastName     String     @map("last_name")
+  phone        String?
+  email        String     @unique
+  backupEmail  String?
+  passwordHash String     @map("password_hash")
+  country      String?    @default("CO")
+  language     String?    @default("es-Es")
+  role         UserRole   @default(cliente)
+  avatar       String?
+  
+  // Status and authentication
+  status       UserStatusEnum   @default(ACTIVE)
+  authProvider AuthProviderEnum @default(LOCAL)
+  
+  // Email/phone confirmation
+  phoneConfirm       Boolean  @default(false)
+  emailConfirm       Boolean  @default(false)
+  backupEmailConfirm Boolean  @default(false)
+  
+  // Two-factor authentication
+  twoFactorEnable Boolean   @default(false)
+  twoFactorSecret String?
+  
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at")
+  updateAt  DateTime @updatedAt
+  
+  // Relations
+  favorites Favorite[]
+  reviews   Review[]
+  sessions  Session[]
+  orders    Order[]
+  
+  @@index([email])
+  @@index([createdAt])
+  @@map("tbl_user")
+}
+```
+
+**Key Fields:**
+- `user_id`: UUID primary key
+- `email`: Unique identifier for login
+- `role`: Either `admin` or `cliente` (customer)
+- `status`: Account status (ACTIVE, INACTIVE, DRAFT, BLOCKED)
+- `authProvider`: Authentication method (LOCAL, GOOGLE, FACEBOOK, OTHER)
+
+**Indexes:**
+- Email lookup for authentication
+- Created date for admin queries
+
+### Session Model
+
+Manages active user sessions and refresh tokens for JWT authentication.
+
+```prisma
+model Session {
+  id String @id @default(uuid())
+  
+  userId String
+  user   User   @relation(fields: [userId], references: [user_id], onDelete: Cascade)
+  
+  refreshToken String
+  
+  // Session metadata
+  userAgent String?
+  ipAddress String?
+  location  String?
+  
+  isActive Boolean @default(true)
+  
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime  @updatedAt
+  
+  @@index([userId])
+  @@index([userAgent])
+  @@index([ipAddress])
+}
+```
+
+**Features:**
+- Tracks device and location information
+- Supports session invalidation via `isActive` flag
+- Cascade delete when user is removed
+
+### Movie Model
+
+Stores movie catalog information using IMDB IDs as primary keys.
+
+```prisma
+model Movie {
+  imdbId     String       @id @map("imdb_id")
+  title      String
+  year       String?
+  type       String?
+  rated      String?
+  released   DateTime?
+  runtime    String?
+  plot       String?
+  language   String?
+  country    String?
+  awards     String?
+  poster     String?
+  createdAt  DateTime     @default(now()) @map("created_at")
+  
+  // Relations
+  prices     MoviePrice[]
+  favorites  Favorite[]
+  genres     MovieGenre[]
+  reviews    Review[]
+  orderItems OrderItem[]
+  
+  @@map("tbl_movie")
+}
+```
+
+**Relationships:**
+- One-to-many with `MoviePrice` for rental and purchase pricing
+- Many-to-many with genres through `MovieGenre`
+- One-to-many with reviews and favorites
+
+### MoviePrice Model
+
+Defines pricing for different transaction types and quality levels.
+
+```prisma
+model MoviePrice {
+  id      Int    @id @default(autoincrement())
+  movieId String @map("movie_id")
+  movie   Movie  @relation(fields: [movieId], references: [imdbId], onDelete: Cascade)
+  
+  transactionType TransactionType @map("transaction_type")
+  quality         QualityOption
+  price           Decimal @db.Decimal(10, 2)
+  
+  @@unique([movieId, transactionType, quality])
+  @@map("tbl_movie_prices")
+}
+
+enum TransactionType {
+  RENT
+  BUY
+}
+
+enum QualityOption {
+  p720
+  p1080
+  p4k
+}
+```
+
+**Pricing Strategy:**
+- Each movie can have multiple prices based on transaction type (RENT/BUY) and quality
+- Unique constraint ensures one price per combination
+- Prices stored as decimal with 2 decimal places
+
+### Order and OrderItem Models
+
+Handles purchase and rental transactions.
+
+```prisma
+model Order {
+  orderId     String      @id @default(uuid()) @map("order_id")
+  userId      String      @map("user_id")
+  totalAmount Float       @map("total_amount")
+  status      OrderStatus @default(PENDING)
+  
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  user  User        @relation(fields: [userId], references: [user_id], onDelete: Cascade)
+  items OrderItem[]
+  
+  @@index([userId])
+  @@map("tbl_order")
+}
+
+model OrderItem {
+  id      String @id @default(uuid())
+  orderId String @map("order_id")
+  imdbId  String @map("imdb_id")
+  price   Float  // Price at time of purchase
+  
+  order Order @relation(fields: [orderId], references: [orderId], onDelete: Cascade)
+  movie Movie @relation(fields: [imdbId], references: [imdbId])
+  
+  @@map("tbl_order_item")
+}
+
+enum OrderStatus {
+  PENDING   // Awaiting payment
+  PAID      // Payment completed
+  CANCELED  // Order canceled
+  REFUNDED  // Payment refunded
+}
+```
+
+**Order Flow:**
+1. Orders start in `PENDING` status
+2. Upon payment, status changes to `PAID`
+3. Items store historical price for auditing
+
+### Review Model
+
+Allows users to rate and review movies.
+
+```prisma
+model Review {
+  reviewId  Int      @id @default(autoincrement()) @map("review_id")
+  rating    Int
+  comment   String?
+  userId    String   @map("user_id")
+  imdbId    String   @map("imdb_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  
+  movie Movie @relation(fields: [imdbId], references: [imdbId], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [user_id], onDelete: Cascade)
+  
+  @@unique([userId, imdbId])
+  @@map("tbl_review")
+}
+```
+
+**Constraints:**
+- One review per user per movie (unique constraint)
+- Cascade delete when user or movie is removed
+
+### Favorite Model
+
+Junction table for user's favorite movies.
+
+```prisma
+model Favorite {
+  userId String @map("user_id")
+  imdbId String @map("imdb_id")
+  
+  movie Movie @relation(fields: [imdbId], references: [imdbId], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [user_id], onDelete: Cascade)
+  
+  @@id([userId, imdbId])
+  @@map("tbl_favorite")
+}
+```
+
+**Features:**
+- Composite primary key (userId + imdbId)
+- Many-to-many relationship between users and movies
+
+## Enums
+
+### UserRole
+
+```prisma
+enum UserRole {
+  admin
+  cliente
+}
+```
+
+Defines access levels in the system. See [Role-Based Access Control](/concepts/role-based-access) for more details.
+
+### UserStatusEnum
+
+```prisma
+enum UserStatusEnum {
+  ACTIVE   // Normal active user
+  INACTIVE // Temporarily inactive
+  DRAFT    // Account setup incomplete
+  BLOCKED  // Banned or blocked
+}
+```
+
+### GenreType
+
+```prisma
+enum GenreType {
+  Anime
+  Drama
+  Documental
+  Fantasia
+  Romance
+  Comedia
+  Horror
+  Ninos
+  Ciencia_ficcion
+  Misterio
+  Thriller
+}
+```
+
+Supported movie genres for categorization and filtering.
+
+## Entity Relationships
+
+<Card title="User → Orders" icon="shopping-cart">
+  One user can have many orders. Orders cascade delete when user is removed.
+</Card>
+
+<Card title="Order → OrderItems" icon="list">
+  Each order contains multiple items. Items cascade delete with order.
+</Card>
+
+<Card title="Movie → Prices" icon="dollar-sign">
+  Movies have multiple price points based on transaction type and quality.
+</Card>
+
+<Card title="User ↔ Movies" icon="heart">
+  Users can favorite movies (many-to-many through Favorite table).
+</Card>
+
+<Card title="User → Reviews ← Movie" icon="star">
+  Users can review movies they've watched (one review per movie per user).
+</Card>
+
+## Database Configuration
+
+The schema uses the following Prisma configuration:
+
+```prisma
+generator client {
+  provider      = "prisma-client"
+  output        = "../src/generated/prisma"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+  moduleFormat  = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+```
+
+**Key Settings:**
+- Generated client in `src/generated/prisma`
+- CommonJS module format for NestJS compatibility
+- Multi-platform binary targets for Docker deployments
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Role-Based Access" icon="shield" href="/concepts/role-based-access">
+    Learn how roles and permissions work
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/auth/register">
+    Explore the REST API endpoints
+  </Card>
+</CardGroup>

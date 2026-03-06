@@ -1,0 +1,186 @@
+---
+title: "Create Order"
+api: "POST /orders"
+description: "Create a new order with one or more movie items"
+---
+
+## Authentication
+
+This endpoint requires:
+- **Bearer Token**: Valid JWT access token
+- **Role**: `Client` role required
+
+## Request Body
+
+<ParamField body="items" type="array" required>
+  Array of order items. Must contain at least one item.
+  
+  <ParamField body="imdbId" type="string" required>
+    The IMDB ID of the movie to purchase or rent
+  </ParamField>
+  
+  <ParamField body="type" type="string" required>
+    Transaction type. Must be one of:
+    - `RENT` - Rent the movie
+    - `BUY` - Purchase the movie
+  </ParamField>
+  
+  <ParamField body="quality" type="string" required>
+    Video quality option. Must be one of:
+    - `p720` - 720p resolution
+    - `p1080` - 1080p resolution
+    - `p4k` - 4K resolution
+  </ParamField>
+</ParamField>
+
+## Response
+
+<ResponseField name="orderId" type="string">
+  Unique identifier for the created order (UUID format)
+</ResponseField>
+
+<ResponseField name="userId" type="string">
+  ID of the user who created the order
+</ResponseField>
+
+<ResponseField name="totalAmount" type="number">
+  Total cost of the order, calculated from current movie prices
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Order status. Will be `PENDING` for newly created orders
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 timestamp when the order was created
+</ResponseField>
+
+<ResponseField name="updatedAt" type="string">
+  ISO 8601 timestamp when the order was last updated
+</ResponseField>
+
+<ResponseField name="items" type="array">
+  Array of order items with frozen prices
+  
+  <ResponseField name="id" type="string">
+    Unique identifier for the order item
+  </ResponseField>
+  
+  <ResponseField name="orderId" type="string">
+    Reference to the parent order
+  </ResponseField>
+  
+  <ResponseField name="imdbId" type="string">
+    IMDB ID of the movie
+  </ResponseField>
+  
+  <ResponseField name="price" type="number">
+    Price of the item at the time of order creation (frozen)
+  </ResponseField>
+</ResponseField>
+
+## Example Request
+
+```json
+{
+  "items": [
+    {
+      "imdbId": "tt0111161",
+      "type": "RENT",
+      "quality": "p1080"
+    },
+    {
+      "imdbId": "tt0068646",
+      "type": "BUY",
+      "quality": "p4k"
+    }
+  ]
+}
+```
+
+## Example Response
+
+```json
+{
+  "orderId": "550e8400-e29b-41d4-a716-446655440000",
+  "userId": "123e4567-e89b-12d3-a456-426614174000",
+  "totalAmount": 24.99,
+  "status": "PENDING",
+  "createdAt": "2026-03-06T10:30:00.000Z",
+  "updatedAt": "2026-03-06T10:30:00.000Z",
+  "items": [
+    {
+      "id": "660e8400-e29b-41d4-a716-446655440001",
+      "orderId": "550e8400-e29b-41d4-a716-446655440000",
+      "imdbId": "tt0111161",
+      "price": 4.99
+    },
+    {
+      "id": "660e8400-e29b-41d4-a716-446655440002",
+      "orderId": "550e8400-e29b-41d4-a716-446655440000",
+      "imdbId": "tt0068646",
+      "price": 19.99
+    }
+  ]
+}
+```
+
+## Behavior
+
+- The order is created with status `PENDING`
+- Prices are frozen at the time of order creation based on the movie's configured price for the specified transaction type and quality
+- Total amount is automatically calculated from all items
+- The operation runs in a database transaction to ensure data integrity
+- User validation is performed before creating the order
+
+## Error Responses
+
+<ResponseField name="400 Bad Request" type="error">
+  Returned when:
+  - Items array is empty
+  - Movie is not available for the specified transaction type and quality
+  - Invalid enum values for `type` or `quality`
+  
+  ```json
+  {
+    "statusCode": 400,
+    "message": "La película tt0111161 no está disponible en RENT p4k",
+    "error": "Bad Request"
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="401 Unauthorized" type="error">
+  Returned when the access token is missing or invalid
+  
+  ```json
+  {
+    "statusCode": 401,
+    "message": "Unauthorized"
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="403 Forbidden" type="error">
+  Returned when the user does not have the `Client` role
+  
+  ```json
+  {
+    "statusCode": 403,
+    "message": "Forbidden resource",
+    "error": "Forbidden"
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="404 Not Found" type="error">
+  Returned when the user account is not found
+  
+  ```json
+  {
+    "statusCode": 404,
+    "message": "Usuario no encontrado",
+    "error": "Not Found"
+  }
+  ```
+</ResponseField>

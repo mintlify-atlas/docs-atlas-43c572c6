@@ -1,0 +1,219 @@
+---
+title: "Get My Orders"
+api: "GET /orders/my-orders"
+description: "Retrieve all orders for the authenticated user"
+---
+
+## Authentication
+
+This endpoint requires:
+- **Bearer Token**: Valid JWT access token
+- **Role**: `Client` role required
+
+<Info>
+This endpoint automatically filters orders to show only those belonging to the authenticated user. It's the recommended way for clients to view their order history.
+</Info>
+
+## Query Parameters
+
+<ParamField query="status" type="string" optional>
+  Filter orders by status. Must be one of:
+  - `PENDING` - Orders pending payment
+  - `PAID` - Paid orders
+  - `CANCELED` - Canceled orders
+  - `REFUNDED` - Refunded orders
+  
+  If omitted, returns orders with all statuses.
+</ParamField>
+
+## Response
+
+Returns an array of order objects belonging to the authenticated user.
+
+<ResponseField name="orderId" type="string">
+  Unique identifier for the order (UUID format)
+</ResponseField>
+
+<ResponseField name="userId" type="string">
+  ID of the authenticated user
+</ResponseField>
+
+<ResponseField name="totalAmount" type="number">
+  Total cost of the order
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Current order status: `PENDING`, `PAID`, `CANCELED`, or `REFUNDED`
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  ISO 8601 timestamp when the order was created
+</ResponseField>
+
+<ResponseField name="updatedAt" type="string">
+  ISO 8601 timestamp when the order was last updated
+</ResponseField>
+
+<ResponseField name="items" type="array">
+  Array of order items
+  
+  <ResponseField name="id" type="string">
+    Unique identifier for the order item
+  </ResponseField>
+  
+  <ResponseField name="orderId" type="string">
+    Reference to the parent order
+  </ResponseField>
+  
+  <ResponseField name="imdbId" type="string">
+    IMDB ID of the movie
+  </ResponseField>
+  
+  <ResponseField name="price" type="number">
+    Price of the item at the time of order creation
+  </ResponseField>
+  
+  <ResponseField name="movie" type="object">
+    Movie details
+    
+    <ResponseField name="title" type="string">
+      Movie title
+    </ResponseField>
+    
+    <ResponseField name="poster" type="string">
+      URL to the movie poster image
+    </ResponseField>
+  </ResponseField>
+</ResponseField>
+
+## Example Request
+
+```bash
+# Get all user's orders
+GET /orders/my-orders
+
+# Get only user's pending orders
+GET /orders/my-orders?status=PENDING
+
+# Get only user's paid orders
+GET /orders/my-orders?status=PAID
+```
+
+## Example Response
+
+```json
+[
+  {
+    "orderId": "550e8400-e29b-41d4-a716-446655440000",
+    "userId": "123e4567-e89b-12d3-a456-426614174000",
+    "totalAmount": 24.99,
+    "status": "PAID",
+    "createdAt": "2026-03-06T10:30:00.000Z",
+    "updatedAt": "2026-03-06T11:00:00.000Z",
+    "items": [
+      {
+        "id": "660e8400-e29b-41d4-a716-446655440001",
+        "orderId": "550e8400-e29b-41d4-a716-446655440000",
+        "imdbId": "tt0111161",
+        "price": 4.99,
+        "movie": {
+          "title": "The Shawshank Redemption",
+          "poster": "https://example.com/posters/tt0111161.jpg"
+        }
+      },
+      {
+        "id": "660e8400-e29b-41d4-a716-446655440002",
+        "orderId": "550e8400-e29b-41d4-a716-446655440000",
+        "imdbId": "tt0068646",
+        "price": 19.99,
+        "movie": {
+          "title": "The Godfather",
+          "poster": "https://example.com/posters/tt0068646.jpg"
+        }
+      }
+    ]
+  },
+  {
+    "orderId": "550e8400-e29b-41d4-a716-446655440010",
+    "userId": "123e4567-e89b-12d3-a456-426614174000",
+    "totalAmount": 12.99,
+    "status": "PENDING",
+    "createdAt": "2026-03-05T15:20:00.000Z",
+    "updatedAt": "2026-03-05T15:20:00.000Z",
+    "items": [
+      {
+        "id": "660e8400-e29b-41d4-a716-446655440011",
+        "orderId": "550e8400-e29b-41d4-a716-446655440010",
+        "imdbId": "tt0468569",
+        "price": 12.99,
+        "movie": {
+          "title": "The Dark Knight",
+          "poster": "https://example.com/posters/tt0468569.jpg"
+        }
+      }
+    ]
+  }
+]
+```
+
+## Behavior
+
+- Only returns orders belonging to the authenticated user (based on JWT token)
+- Orders are sorted by creation date (most recent first)
+- Each order includes full movie details (title and poster) for all items
+- Status filter is optional and case-sensitive
+- Empty array is returned if the user has no orders matching the criteria
+- User validation is performed to ensure the user exists
+
+## Use Cases
+
+This endpoint is ideal for:
+- Displaying order history in a user's account page
+- Showing pending orders awaiting payment
+- Building a purchase/rental history view
+- Tracking order status changes
+
+## Comparison with Other Endpoints
+
+| Endpoint | Role | Scope | Use Case |
+|----------|------|-------|----------|
+| `GET /orders/my-orders` | Client | User's own orders | View personal order history |
+| `GET /orders` | Admin | All orders | Administrative oversight |
+| `GET /orders/:id` | Client | Single order (with ownership check) | View specific order details |
+
+## Error Responses
+
+<ResponseField name="401 Unauthorized" type="error">
+  Returned when the access token is missing or invalid
+  
+  ```json
+  {
+    "statusCode": 401,
+    "message": "Unauthorized"
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="403 Forbidden" type="error">
+  Returned when the user does not have the `Client` role
+  
+  ```json
+  {
+    "statusCode": 403,
+    "message": "Forbidden resource",
+    "error": "Forbidden"
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="404 Not Found" type="error">
+  Returned when the user account is not found
+  
+  ```json
+  {
+    "statusCode": 404,
+    "message": "Usuario no encontrado",
+    "error": "Not Found"
+  }
+  ```
+</ResponseField>

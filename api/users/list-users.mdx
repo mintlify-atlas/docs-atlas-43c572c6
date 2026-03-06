@@ -1,0 +1,214 @@
+---
+title: "List Users"
+api: "GET /users"
+description: "Retrieve a list of all users in the system"
+---
+
+This endpoint returns all registered users in the Renta Pelis system. This is an admin-only endpoint.
+
+## Authentication
+
+<Warning>This endpoint requires Admin role authentication.</Warning>
+
+Include the JWT token in the Authorization header:
+
+```
+Authorization: Bearer <your_token>
+```
+
+## Response
+
+<ResponseField name="users" type="array">
+  Array of user objects
+  
+  <Expandable title="User Object">
+    <ResponseField name="user_id" type="string" required>
+      Unique user identifier (UUID)
+    </ResponseField>
+    
+    <ResponseField name="name" type="string" required>
+      User's first name
+    </ResponseField>
+    
+    <ResponseField name="lastName" type="string" required>
+      User's last name
+    </ResponseField>
+    
+    <ResponseField name="email" type="string" required>
+      User's primary email address (unique)
+    </ResponseField>
+    
+    <ResponseField name="phone" type="string">
+      User's phone number
+    </ResponseField>
+    
+    <ResponseField name="backupEmail" type="string">
+      User's backup email address
+    </ResponseField>
+    
+    <ResponseField name="country" type="string">
+      User's country code (default: "CO")
+    </ResponseField>
+    
+    <ResponseField name="language" type="string">
+      User's preferred language (default: "es-Es")
+    </ResponseField>
+    
+    <ResponseField name="role" type="enum" required>
+      User's role: `admin` or `cliente`
+    </ResponseField>
+    
+    <ResponseField name="avatar" type="string">
+      URL to user's avatar image
+    </ResponseField>
+    
+    <ResponseField name="status" type="enum" required>
+      User's account status: `ACTIVE`, `INACTIVE`, `DRAFT`, or `BLOCKED`
+    </ResponseField>
+    
+    <ResponseField name="authProvider" type="enum" required>
+      Authentication provider: `LOCAL`, `GOOGLE`, `FACEBOOK`, or `OTHER`
+    </ResponseField>
+    
+    <ResponseField name="createdAt" type="string" required>
+      Account creation timestamp (ISO 8601 format)
+    </ResponseField>
+    
+    <ResponseField name="updateAt" type="string" required>
+      Last update timestamp (ISO 8601 format)
+    </ResponseField>
+    
+    <ResponseField name="phoneConfirm" type="boolean" required>
+      Whether phone number is confirmed
+    </ResponseField>
+    
+    <ResponseField name="emailConfirm" type="boolean" required>
+      Whether primary email is confirmed
+    </ResponseField>
+    
+    <ResponseField name="backupEmailConfirm" type="boolean" required>
+      Whether backup email is confirmed
+    </ResponseField>
+    
+    <ResponseField name="twoFactorEnable" type="boolean" required>
+      Whether two-factor authentication is enabled
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Example Request
+
+<CodeGroup>
+```bash cURL
+curl https://api.rentapelis.com/users \
+  -H "Authorization: Bearer <your_token>"
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.rentapelis.com/users', {
+  headers: {
+    'Authorization': 'Bearer <your_token>'
+  }
+});
+const users = await response.json();
+console.log(users);
+```
+
+```python Python
+import requests
+
+headers = {
+    'Authorization': 'Bearer <your_token>'
+}
+
+response = requests.get('https://api.rentapelis.com/users', headers=headers)
+users = response.json()
+print(users)
+```
+</CodeGroup>
+
+## Example Response
+
+```json
+[
+  {
+    "user_id": "123e4567-e89b-12d3-a456-426614174000",
+    "name": "Juan",
+    "lastName": "Pérez",
+    "email": "juan.perez@example.com",
+    "phone": "+573001234567",
+    "backupEmail": "juan.backup@example.com",
+    "country": "CO",
+    "language": "es-Es",
+    "role": "cliente",
+    "avatar": "https://example.com/avatars/juan.jpg",
+    "status": "ACTIVE",
+    "authProvider": "LOCAL",
+    "createdAt": "2024-01-15T10:30:00.000Z",
+    "updateAt": "2024-01-20T14:45:00.000Z",
+    "phoneConfirm": true,
+    "emailConfirm": true,
+    "backupEmailConfirm": false,
+    "twoFactorEnable": false
+  },
+  {
+    "user_id": "987e6543-e21b-98d7-b654-426614174001",
+    "name": "María",
+    "lastName": "González",
+    "email": "maria.gonzalez@example.com",
+    "phone": "+573007654321",
+    "backupEmail": null,
+    "country": "CO",
+    "language": "es-Es",
+    "role": "admin",
+    "avatar": null,
+    "status": "ACTIVE",
+    "authProvider": "GOOGLE",
+    "createdAt": "2024-02-01T08:15:00.000Z",
+    "updateAt": "2024-02-01T08:15:00.000Z",
+    "phoneConfirm": false,
+    "emailConfirm": true,
+    "backupEmailConfirm": false,
+    "twoFactorEnable": true
+  }
+]
+```
+
+## Error Responses
+
+<ResponseField name="statusCode" type="number">
+  HTTP status code
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  Error message description
+</ResponseField>
+
+### 401 Unauthorized
+
+```json
+{
+  "statusCode": 401,
+  "message": "Unauthorized"
+}
+```
+
+### 403 Forbidden
+
+Returned when the authenticated user does not have admin role:
+
+```json
+{
+  "statusCode": 403,
+  "message": "Forbidden resource"
+}
+```
+
+### 500 Internal Server Error
+
+```json
+{
+  "statusCode": 500,
+  "message": "Internal server error"
+}
+```

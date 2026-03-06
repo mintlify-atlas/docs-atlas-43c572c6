@@ -1,0 +1,91 @@
+---
+title: "Introduction"
+description: "Welcome to Renta Pelis Backend - A powerful NestJS REST API for movie rental and purchase platform"
+---
+
+# Renta Pelis Backend
+
+Renta Pelis Backend is a production-ready REST API built with NestJS, designed to power a complete movie rental and purchase platform with robust authentication, role-based access control, and order management.
+
+## Overview
+
+This API provides a comprehensive backend solution for managing movie catalogs, user accounts, orders, and payments. Built on modern technologies like NestJS, PostgreSQL, and Prisma ORM, it offers scalability, type safety, and developer-friendly architecture.
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="JWT Authentication" icon="lock">
+    Secure authentication with JWT tokens and refresh token rotation
+  </Card>
+  <Card title="Role-Based Access" icon="shield">
+    Fine-grained permissions for Admin and Client roles
+  </Card>
+  <Card title="Two-Factor Auth" icon="mobile">
+    Optional 2FA support with TOTP for enhanced security
+  </Card>
+  <Card title="Movie Management" icon="film">
+    Complete CRUD operations for movies with pricing tiers and genres
+  </Card>
+  <Card title="Order Processing" icon="shopping-cart">
+    Order management with status tracking and validation
+  </Card>
+  <Card title="Session Tracking" icon="clock">
+    Device and location-aware session management
+  </Card>
+  <Card title="Prisma ORM" icon="database">
+    Type-safe database access with PostgreSQL
+  </Card>
+  <Card title="API Documentation" icon="book-open">
+    Auto-generated Swagger/OpenAPI documentation
+  </Card>
+</CardGroup>
+
+## Quick Links
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Get your development environment running in minutes
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/auth/register">
+    Explore all available endpoints and their parameters
+  </Card>
+  <Card title="Authentication Guide" icon="key" href="/auth/overview">
+    Learn about authentication flows and security
+  </Card>
+  <Card title="Database Schema" icon="diagram-project" href="/concepts/database-schema">
+    Understand the data model and relationships
+  </Card>
+</CardGroup>
+
+## Technology Stack
+
+- **Framework**: NestJS 11.x
+- **Database**: PostgreSQL with Prisma ORM
+- **Authentication**: JWT with Passport.js
+- **Validation**: class-validator and class-transformer
+- **API Documentation**: Swagger/OpenAPI
+- **Session Storage**: Redis (optional)
+- **Email**: Resend for transactional emails
+
+## Use Cases
+
+This API is designed for:
+
+- **Movie Rental Platforms**: Rent movies with different quality tiers (720p, 1080p, 4K)
+- **Digital Movie Sales**: Purchase movies for permanent access
+- **Movie Catalogs**: Browse and search movie collections with genres and ratings
+- **User Reviews**: Collect and display user ratings and reviews
+- **Multi-tenant Systems**: Support admin and client user roles
+
+## Architecture Highlights
+
+- **Modular Design**: Clean separation of concerns with NestJS modules
+- **Type Safety**: Full TypeScript coverage with strict type checking
+- **Guard System**: Flexible authentication and authorization guards
+- **DTO Validation**: Request validation with automatic error handling
+- **Database Migrations**: Version-controlled schema changes with Prisma
+- **Error Handling**: Consistent error responses with proper HTTP status codes
+
+<Note>
+  This documentation covers the REST API endpoints, authentication flows, and integration guides. For frontend integration examples, see the Quickstart guide.
+</Note>

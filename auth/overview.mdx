@@ -1,0 +1,325 @@
+---
+title: 'Authentication Overview'
+description: 'Learn about the authentication architecture in Renta Pelis Backend'
+---
+
+## Overview
+
+Renta Pelis Backend implements a comprehensive JWT-based authentication system built on NestJS. The system supports multiple authentication providers and includes role-based access control, session management, and optional two-factor authentication.
+
+## Architecture
+
+The authentication system is composed of several key components:
+
+<CardGroup cols={2}>
+  <Card title="Auth Module" icon="shield-halved">
+    Core authentication logic including registration, login, and token management
+  </Card>
+  <Card title="Guards" icon="lock">
+    Request-level protection with AuthGuard and RolesGuard
+  </Card>
+  <Card title="Sessions" icon="clock">
+    Device tracking and session lifecycle management
+  </Card>
+  <Card title="Two-Factor Auth" icon="mobile">
+    Optional TOTP-based 2FA using speakeasy
+  </Card>
+</CardGroup>
+
+## Supported Authentication Providers
+
+The system supports multiple authentication providers as defined in the Prisma schema:
+
+```typescript
+enum AuthProviderEnum {
+  LOCAL      // Email/password authentication
+  GOOGLE     // Google OAuth
+  FACEBOOK   // Facebook OAuth
+  OTHER      // Custom providers
+}
+```
+
+<Note>
+  By default, new users are created with the `LOCAL` provider. OAuth providers can be configured separately.
+</Note>
+
+## User Roles
+
+The system implements two user roles:
+
+```typescript
+enum UserRole {
+  admin     // Full administrative access
+  cliente   // Standard customer access
+}
+```
+
+New users are assigned the `cliente` role by default.
+
+## Registration Flow
+
+The registration process follows these steps:
+
+<Steps>
+  <Step title="Submit Registration Data">
+    Client sends user details to `POST /auth/register`
+    
+    ```typescript
+    interface RegisterDto {
+      name: string;           // Minimum 2 characters
+      lastName: string;       // Minimum 2 characters
+      email: string;          // Valid email format
+      password: string;       // Minimum 8 characters
+      phone: string;          // Valid phone number
+      country: string;        // Default: "CO"
+      language: string;       // Default: "es-Es"
+      authProvider: AuthProviderEnum;
+      role?: UserRole;        // Optional, defaults to cliente
+    }
+    ```
+  </Step>
+  
+  <Step title="Password Hashing">
+    The system hashes the password using bcrypt via the `HashingService`:
+    
+    ```typescript auth.service.ts
+    async register(newUser: RegisterDto): Promise<responseAuth> {
+      const user = await this.usersService.create(newUser);
+      const payload = { sub: user.user_id, email: user.email, role: user.role };
+      return {
+        accessToken: this.jwtService.sign(payload),
+        user: {
+          id: user.user_id,
+          email: user.email,
+        },
+      };
+    }
+    ```
+  </Step>
+  
+  <Step title="Generate Access Token">
+    Upon successful registration, an access token is generated with the user's ID, email, and role
+  </Step>
+  
+  <Step title="Return Response">
+    The API returns the access token and basic user information
+    
+    ```json
+    {
+      "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+      "user": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "email": "user@example.com"
+      }
+    }
+    ```
+  </Step>
+</Steps>
+
+## Login Flow
+
+The login process authenticates existing users:
+
+<Steps>
+  <Step title="Submit Credentials">
+    Client sends email and password to `POST /auth/login`
+    
+    ```typescript
+    interface LoginDto {
+      email: string;     // Valid email, trimmed and lowercased
+      password: string;  // Minimum 6 characters
+    }
+    ```
+  </Step>
+  
+  <Step title="Validate Credentials">
+    The system verifies the email exists and password matches:
+    
+    ```typescript auth.service.ts
+    async login({ email, password }: LoginDto) {
+      const user = await this.usersService.findByEmail(email);
+      if (!user) {
+        throw new UnauthorizedException('Usuario no encontrado');
+      }
+
+      const isPasswordValid = await this.hashingService.compare(
+        password.trim(),
+        user.passwordHash,
+      );
+
+      if (!isPasswordValid) {
+        throw new UnauthorizedException('Contraseña incorrecta');
+      }
+
+      const payload = { sub: user.user_id, email: user.email, role: user.role };
+      const token = await this.jwtService.signAsync(payload);
+
+      return { access_token: token };
+    }
+    ```
+  </Step>
+  
+  <Step title="Generate JWT Token">
+    A signed JWT token is created containing the user's payload
+  </Step>
+  
+  <Step title="Return Access Token">
+    The access token is returned to the client
+    
+    ```json
+    {
+      "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+    }
+    ```
+  </Step>
+</Steps>
+
+## Guard System
+
+The authentication system uses NestJS guards to protect routes:
+
+### AuthGuard
+
+The `AuthGuard` validates JWT tokens on protected routes:
+
+```typescript auth.guard.ts
+@Injectable()
+export class AuthGuard implements CanActivate {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request: Request = context.switchToHttp().getRequest();
+    
+    // Check if route is public
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    
+    if (isPublic) {
+      return true;
+    }
+    
+    // Extract and verify JWT token
+    const token = this.extractTokenFromHeader(request);
+    if (!token) {
+      throw new UnauthorizedException('Token no proporcionado');
+    }
+    
+    const payload: JwtPayload = await this.jwtService.verifyAsync(token);
+    request['user'] = payload;
+    
+    return true;
+  }
+}
+```
+
+### RolesGuard
+
+The `RolesGuard` enforces role-based access control:
+
+```typescript roles.guard.ts
+@Injectable()
+export class RolesGuard implements CanActivate {
+  canActivate(context: ExecutionContext): boolean {
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    
+    if (isPublic) {
+      return true;
+    }
+    
+    const roles = this.reflector.getAllAndOverride<Role>(ROLES_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    
+    if (!roles) {
+      return true;
+    }
+    
+    const request = context.switchToHttp().getRequest<RequestWithUser>();
+    const { user } = request;
+    
+    return roles.includes(user.role);
+  }
+}
+```
+
+### Usage Example
+
+```typescript users.controller.ts
+@Controller('users')
+@UseGuards(AuthGuard, RolesGuard)
+@Roles(Role.Admin)
+export class UsersController {
+  // Only admin users can access these routes
+  
+  @Get()
+  findAll() {
+    return this.usersService.findAll();
+  }
+}
+```
+
+## Getting User Profile
+
+Authenticated users can retrieve their profile information:
+
+```typescript
+@Get('profile')
+@UseGuards(AuthGuard)
+getProfile(@ActiveUser() user: UserActiveInterface) {
+  return this.authService.getProfile(user);
+}
+```
+
+The `@ActiveUser()` decorator extracts the authenticated user from the request.
+
+## JWT Payload Structure
+
+The JWT token contains the following payload:
+
+```typescript
+interface JwtPayload {
+  sub: string;      // User ID
+  email: string;    // User email
+  role: string;     // User role (admin or cliente)
+  iat: number;      // Issued at timestamp
+  exp: number;      // Expiration timestamp
+}
+```
+
+<Warning>
+  Never include sensitive information like passwords or personal data in the JWT payload. Only store identifiers and non-sensitive metadata.
+</Warning>
+
+## User Status Management
+
+Users can have different statuses that affect their authentication:
+
+```typescript
+enum UserStatusEnum {
+  ACTIVE     // User can authenticate normally
+  INACTIVE   // User account is inactive
+  DRAFT      // User account is not fully set up
+  BLOCKED    // User is blocked from authenticating
+}
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="JWT Tokens" icon="key" href="/auth/jwt-tokens">
+    Learn about token structure, expiration, and refresh flows
+  </Card>
+  <Card title="Sessions" icon="clock" href="/auth/sessions">
+    Understand session management and device tracking
+  </Card>
+  <Card title="Two-Factor Auth" icon="mobile" href="/auth/two-factor">
+    Implement TOTP-based 2FA for enhanced security
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/auth/register">
+    View complete authentication API documentation
+  </Card>
+</CardGroup>

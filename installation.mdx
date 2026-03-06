@@ -1,0 +1,286 @@
+---
+title: "Installation"
+description: "Set up the Renta Pelis Backend API on your local machine or server"
+---
+
+This guide will walk you through setting up the Renta Pelis Backend API for development or production.
+
+## System Requirements
+
+Before you begin, ensure your system meets the following requirements:
+
+- **Node.js**: Version 18 or higher
+- **PostgreSQL**: Version 12 or higher
+- **Package Manager**: pnpm (recommended), npm, or yarn
+- **Redis**: Version 7 or higher (for caching)
+
+## Installation
+
+### 1. Clone the Repository
+
+```bash
+git clone <repository-url>
+cd backpelis
+```
+
+### 2. Install Dependencies
+
+You can use any of the following package managers:
+
+<CodeGroup>
+```bash pnpm
+pnpm install
+```
+
+```bash npm
+npm install
+```
+
+```bash yarn
+yarn install
+```
+</CodeGroup>
+
+<Info>This project uses pnpm version 10.28.2. It's recommended to use the same version for consistency.</Info>
+
+## Environment Configuration
+
+### 1. Create Environment File
+
+Create a `.env` file in the root directory with the following variables:
+
+```bash
+# Database Configuration
+DATABASE_URL="postgresql://user:password@localhost:5432/rentapelis"
+DB_USER="your_db_user"
+DB_PASSWORD="your_db_password"
+DB_NAME="rentapelis"
+
+# Server Configuration
+PORT=3000
+NODE_ENV=development
+
+# JWT Configuration
+JWT_SECRET="your_jwt_secret_key"
+JWT_EXPIRATION="1h"
+JWT_REFRESH_EXPIRATION="7d"
+
+# CORS Configuration
+ALLOWED_ORIGINS="http://localhost:3000,http://localhost:3001"
+
+# Redis Configuration
+REDIS_HOST="localhost"
+REDIS_PORT=6379
+```
+
+<Warning>
+  Make sure to replace placeholder values with your actual configuration. Never commit your `.env` file to version control.
+</Warning>
+
+## Database Setup
+
+### 1. Start PostgreSQL
+
+Ensure PostgreSQL is running on your system. You can verify this by running:
+
+```bash
+psql --version
+```
+
+### 2. Create Database
+
+Create a new PostgreSQL database:
+
+```bash
+psql -U postgres
+CREATE DATABASE rentapelis;
+```
+
+### 3. Run Prisma Migrations
+
+Generate the Prisma client and run migrations to set up your database schema:
+
+```bash
+# Generate Prisma client
+pnpx prisma generate
+
+# Run migrations
+pnpx prisma migrate deploy
+```
+
+For development, you can also use:
+
+```bash
+pnpx prisma migrate dev
+```
+
+## Docker Setup (Alternative)
+
+If you prefer using Docker, the project includes a `docker-compose.yml` file that sets up the entire stack:
+
+### 1. Prerequisites
+
+- Docker Desktop or Docker Engine
+- Docker Compose
+
+### 2. Start Services
+
+```bash
+docker-compose up -d
+```
+
+This will start:
+- **API**: NestJS application on port 3000
+- **PostgreSQL**: Database on port 5433 (mapped from container's 5432)
+- **Redis**: Cache server on port 6379
+
+### 3. View Logs
+
+```bash
+# View all logs
+docker-compose logs -f
+
+# View API logs only
+docker-compose logs -f api
+```
+
+### 4. Stop Services
+
+```bash
+docker-compose down
+```
+
+## Running the Application
+
+### Development Mode
+
+Start the application in development mode with hot-reload:
+
+```bash
+pnpm run start:dev
+```
+
+The server will start on `http://localhost:3000` (or the port specified in your `.env` file).
+
+### Production Mode
+
+Build and run the application in production mode:
+
+```bash
+# Build the application
+pnpm run build
+
+# Start in production mode
+pnpm run start:prod
+```
+
+### Standard Mode
+
+Start without watch mode:
+
+```bash
+pnpm run start
+```
+
+## Verification
+
+Verify your installation is successful by checking the following:
+
+### 1. Health Check
+
+Access the API in your browser or using curl:
+
+```bash
+curl http://localhost:3000
+```
+
+### 2. Swagger Documentation
+
+The API documentation is available at:
+
+```
+http://localhost:3000/api
+```
+
+Open this URL in your browser to explore all available endpoints.
+
+### 3. Database Connection
+
+Check if the database connection is working:
+
+```bash
+pnpx prisma studio
+```
+
+This opens Prisma Studio, a visual database browser at `http://localhost:5555`.
+
+## Troubleshooting
+
+### Database Connection Issues
+
+If you encounter database connection errors:
+
+1. Verify PostgreSQL is running
+2. Check your `DATABASE_URL` in the `.env` file
+3. Ensure the database exists
+4. Verify database credentials are correct
+
+### Port Already in Use
+
+If port 3000 is already in use:
+
+1. Change the `PORT` in your `.env` file
+2. Or stop the process using port 3000:
+
+```bash
+# Find process using port 3000
+lsof -i :3000
+
+# Kill the process (replace PID with actual process ID)
+kill -9 <PID>
+```
+
+### Prisma Client Issues
+
+If you encounter Prisma client errors:
+
+```bash
+# Regenerate Prisma client
+pnpx prisma generate
+
+# If issues persist, delete and regenerate
+rm -rf node_modules/.prisma
+pnpx prisma generate
+```
+
+## Next Steps
+
+Now that you have the API running, you can:
+
+- Explore the [API Reference](/api-reference) to learn about available endpoints
+- Read the [Quickstart Guide](/quickstart) for basic usage examples
+- Check out [Authentication](/auth/login) to learn how to authenticate users
+
+## Additional Scripts
+
+The project includes several useful scripts:
+
+```bash
+# Run tests
+pnpm run test
+
+# Run tests in watch mode
+pnpm run test:watch
+
+# Run end-to-end tests
+pnpm run test:e2e
+
+# Generate test coverage
+pnpm run test:cov
+
+# Lint code
+pnpm run lint
+
+# Format code
+pnpm run format
+```

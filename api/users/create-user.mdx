@@ -1,0 +1,272 @@
+---
+title: "Create User"
+api: "POST /users"
+description: "Create a new user account in the system"
+---
+
+This endpoint allows administrators to create new user accounts in the Renta Pelis system.
+
+## Authentication
+
+<Warning>This endpoint requires Admin role authentication.</Warning>
+
+Include the JWT token in the Authorization header:
+
+```
+Authorization: Bearer <your_token>
+```
+
+## Request Body
+
+<ParamField body="name" type="string" required>
+  User's first name (minimum 2 characters)
+</ParamField>
+
+<ParamField body="lastName" type="string" required>
+  User's last name (minimum 2 characters)
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  User's primary email address (must be valid email format and unique)
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  User's password (minimum 8 characters)
+</ParamField>
+
+<ParamField body="phone" type="string" required>
+  User's phone number in international format (minimum 10 characters)
+</ParamField>
+
+<ParamField body="country" type="string" required>
+  User's country code (e.g., "CO", "US", "MX")
+</ParamField>
+
+<ParamField body="language" type="string" required>
+  User's preferred language (e.g., "es-Es", "en-US")
+</ParamField>
+
+<ParamField body="authProvider" type="enum" required>
+  Authentication provider: `LOCAL`, `GOOGLE`, `FACEBOOK`, or `OTHER`
+</ParamField>
+
+<ParamField body="role" type="enum">
+  User's role: `admin` or `cliente` (default: `cliente`)
+</ParamField>
+
+## Response
+
+Returns the created user object with all its properties, including the generated `user_id` and timestamps.
+
+<ResponseField name="user_id" type="string">
+  Unique user identifier (UUID)
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  User's first name
+</ResponseField>
+
+<ResponseField name="lastName" type="string">
+  User's last name
+</ResponseField>
+
+<ResponseField name="email" type="string">
+  User's primary email address
+</ResponseField>
+
+<ResponseField name="phone" type="string">
+  User's phone number
+</ResponseField>
+
+<ResponseField name="country" type="string">
+  User's country code
+</ResponseField>
+
+<ResponseField name="language" type="string">
+  User's preferred language
+</ResponseField>
+
+<ResponseField name="role" type="enum">
+  User's role
+</ResponseField>
+
+<ResponseField name="authProvider" type="enum">
+  Authentication provider
+</ResponseField>
+
+<ResponseField name="status" type="enum">
+  User's account status (default: ACTIVE)
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  Account creation timestamp
+</ResponseField>
+
+<ResponseField name="updateAt" type="string">
+  Last update timestamp
+</ResponseField>
+
+## Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.rentapelis.com/users \
+  -H "Authorization: Bearer <your_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Juan",
+    "lastName": "Pérez",
+    "email": "juan.perez@example.com",
+    "password": "SecurePass123!",
+    "phone": "+573001234567",
+    "country": "CO",
+    "language": "es-Es",
+    "authProvider": "LOCAL",
+    "role": "cliente"
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.rentapelis.com/users', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer <your_token>',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    name: 'Juan',
+    lastName: 'Pérez',
+    email: 'juan.perez@example.com',
+    password: 'SecurePass123!',
+    phone: '+573001234567',
+    country: 'CO',
+    language: 'es-Es',
+    authProvider: 'LOCAL',
+    role: 'cliente'
+  })
+});
+const user = await response.json();
+console.log(user);
+```
+
+```python Python
+import requests
+
+headers = {
+    'Authorization': 'Bearer <your_token>',
+    'Content-Type': 'application/json'
+}
+
+data = {
+    'name': 'Juan',
+    'lastName': 'Pérez',
+    'email': 'juan.perez@example.com',
+    'password': 'SecurePass123!',
+    'phone': '+573001234567',
+    'country': 'CO',
+    'language': 'es-Es',
+    'authProvider': 'LOCAL',
+    'role': 'cliente'
+}
+
+response = requests.post(
+    'https://api.rentapelis.com/users',
+    headers=headers,
+    json=data
+)
+user = response.json()
+print(user)
+```
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "user_id": "123e4567-e89b-12d3-a456-426614174000",
+  "name": "Juan",
+  "lastName": "Pérez",
+  "email": "juan.perez@example.com",
+  "phone": "+573001234567",
+  "backupEmail": null,
+  "country": "CO",
+  "language": "es-Es",
+  "role": "cliente",
+  "avatar": null,
+  "status": "ACTIVE",
+  "authProvider": "LOCAL",
+  "createdAt": "2024-01-15T10:30:00.000Z",
+  "updateAt": "2024-01-15T10:30:00.000Z",
+  "phoneConfirm": false,
+  "emailConfirm": false,
+  "backupEmailConfirm": false,
+  "twoFactorEnable": false
+}
+```
+
+## Error Responses
+
+<ResponseField name="statusCode" type="number">
+  HTTP status code
+</ResponseField>
+
+<ResponseField name="message" type="string | array">
+  Error message description or array of validation errors
+</ResponseField>
+
+### 400 Bad Request
+
+Validation errors will return an array of messages:
+
+```json
+{
+  "statusCode": 400,
+  "message": [
+    "name must be longer than or equal to 2 characters",
+    "email must be an email",
+    "password must be longer than or equal to 8 characters",
+    "phone must be a valid phone number"
+  ],
+  "error": "Bad Request"
+}
+```
+
+### 401 Unauthorized
+
+```json
+{
+  "statusCode": 401,
+  "message": "Unauthorized"
+}
+```
+
+### 403 Forbidden
+
+Returned when the authenticated user does not have admin role:
+
+```json
+{
+  "statusCode": 403,
+  "message": "Forbidden resource"
+}
+```
+
+### 409 Conflict
+
+Returned when email already exists:
+
+```json
+{
+  "statusCode": 409,
+  "message": "User with this email already exists"
+}
+```
+
+### 500 Internal Server Error
+
+```json
+{
+  "statusCode": 500,
+  "message": "Internal server error"
+}
+```

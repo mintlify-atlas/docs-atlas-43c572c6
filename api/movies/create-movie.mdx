@@ -1,0 +1,360 @@
+---
+title: "Create Movie"
+api: "POST /movies"
+description: "Add a new movie to the catalog"
+---
+
+This endpoint allows administrators to add a new movie to the Renta Pelis catalog.
+
+## Authentication
+
+<Warning>This endpoint requires Admin role authentication.</Warning>
+
+Include the JWT token in the Authorization header:
+
+```
+Authorization: Bearer <your_token>
+```
+
+## Request Body
+
+<ParamField body="imdbId" type="string" required>
+  The IMDB identifier for the movie (e.g., "tt1234567")
+</ParamField>
+
+<ParamField body="title" type="string" required>
+  The title of the movie
+</ParamField>
+
+<ParamField body="year" type="string">
+  The release year of the movie
+</ParamField>
+
+<ParamField body="type" type="string" required>
+  The type of content (e.g., "movie", "series")
+</ParamField>
+
+<ParamField body="released" type="string" required>
+  The release date in ISO 8601 format (e.g., "2023-12-04T16:30:00Z")
+</ParamField>
+
+<ParamField body="runtime" type="string" required>
+  The runtime of the movie (e.g., "120 min")
+</ParamField>
+
+<ParamField body="plot" type="string">
+  A brief description or plot summary of the movie
+</ParamField>
+
+<ParamField body="language" type="string" required>
+  The language(s) of the movie
+</ParamField>
+
+<ParamField body="country" type="string" required>
+  The country of origin
+</ParamField>
+
+<ParamField body="awards" type="string">
+  Awards and nominations received
+</ParamField>
+
+<ParamField body="poster" type="string">
+  URL to the movie poster image
+</ParamField>
+
+<ParamField body="genres" type="array" required>
+  Array of genre types. Available genres: `Anime`, `Drama`, `Documental`, `Fantasia`, `Romance`, `Comedia`, `Horror`, `Ninos`, `Ciencia_ficcion`, `Misterio`, `Thriller`
+</ParamField>
+
+<ParamField body="prices" type="array" required>
+  Array of price objects for different transaction types and qualities
+  
+  <Expandable title="Price Object">
+    <ParamField body="transactionType" type="enum" required>
+      Type of transaction: `RENT` or `BUY`
+    </ParamField>
+    
+    <ParamField body="quality" type="enum" required>
+      Video quality: `p720`, `p1080`, or `p4k`
+    </ParamField>
+    
+    <ParamField body="price" type="number" required>
+      The price for this transaction type and quality
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## Response
+
+Returns the created movie object with all its properties, including the generated `createdAt` timestamp.
+
+<ResponseField name="imdbId" type="string">
+  The IMDB identifier for the movie
+</ResponseField>
+
+<ResponseField name="title" type="string">
+  The title of the movie
+</ResponseField>
+
+<ResponseField name="year" type="string">
+  The release year of the movie
+</ResponseField>
+
+<ResponseField name="type" type="string">
+  The type of content
+</ResponseField>
+
+<ResponseField name="released" type="string">
+  The release date in ISO 8601 format
+</ResponseField>
+
+<ResponseField name="runtime" type="string">
+  The runtime of the movie
+</ResponseField>
+
+<ResponseField name="plot" type="string">
+  Plot summary of the movie
+</ResponseField>
+
+<ResponseField name="language" type="string">
+  The language(s) of the movie
+</ResponseField>
+
+<ResponseField name="country" type="string">
+  The country of origin
+</ResponseField>
+
+<ResponseField name="awards" type="string">
+  Awards and nominations received
+</ResponseField>
+
+<ResponseField name="poster" type="string">
+  URL to the movie poster image
+</ResponseField>
+
+<ResponseField name="createdAt" type="string">
+  When the movie was added to the catalog
+</ResponseField>
+
+<ResponseField name="genres" type="array">
+  Array of genre objects
+</ResponseField>
+
+<ResponseField name="prices" type="array">
+  Array of price objects
+</ResponseField>
+
+## Example Request
+
+<CodeGroup>
+```bash cURL
+curl -X POST https://api.rentapelis.com/movies \
+  -H "Authorization: Bearer <your_token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "imdbId": "tt1234567",
+    "title": "The Matrix",
+    "year": "1999",
+    "type": "movie",
+    "released": "1999-03-31T00:00:00Z",
+    "runtime": "136 min",
+    "plot": "A computer hacker learns from mysterious rebels about the true nature of his reality.",
+    "language": "English",
+    "country": "USA",
+    "awards": "Won 4 Oscars",
+    "poster": "https://example.com/poster.jpg",
+    "genres": ["Ciencia_ficcion", "Thriller"],
+    "prices": [
+      {
+        "transactionType": "RENT",
+        "quality": "p1080",
+        "price": 3.99
+      },
+      {
+        "transactionType": "BUY",
+        "quality": "p4k",
+        "price": 14.99
+      }
+    ]
+  }'
+```
+
+```javascript JavaScript
+const response = await fetch('https://api.rentapelis.com/movies', {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer <your_token>',
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    imdbId: 'tt1234567',
+    title: 'The Matrix',
+    year: '1999',
+    type: 'movie',
+    released: '1999-03-31T00:00:00Z',
+    runtime: '136 min',
+    plot: 'A computer hacker learns from mysterious rebels about the true nature of his reality.',
+    language: 'English',
+    country: 'USA',
+    awards: 'Won 4 Oscars',
+    poster: 'https://example.com/poster.jpg',
+    genres: ['Ciencia_ficcion', 'Thriller'],
+    prices: [
+      {
+        transactionType: 'RENT',
+        quality: 'p1080',
+        price: 3.99
+      },
+      {
+        transactionType: 'BUY',
+        quality: 'p4k',
+        price: 14.99
+      }
+    ]
+  })
+});
+const movie = await response.json();
+console.log(movie);
+```
+
+```python Python
+import requests
+
+headers = {
+    'Authorization': 'Bearer <your_token>',
+    'Content-Type': 'application/json'
+}
+
+data = {
+    'imdbId': 'tt1234567',
+    'title': 'The Matrix',
+    'year': '1999',
+    'type': 'movie',
+    'released': '1999-03-31T00:00:00Z',
+    'runtime': '136 min',
+    'plot': 'A computer hacker learns from mysterious rebels about the true nature of his reality.',
+    'language': 'English',
+    'country': 'USA',
+    'awards': 'Won 4 Oscars',
+    'poster': 'https://example.com/poster.jpg',
+    'genres': ['Ciencia_ficcion', 'Thriller'],
+    'prices': [
+        {
+            'transactionType': 'RENT',
+            'quality': 'p1080',
+            'price': 3.99
+        },
+        {
+            'transactionType': 'BUY',
+            'quality': 'p4k',
+            'price': 14.99
+        }
+    ]
+}
+
+response = requests.post(
+    'https://api.rentapelis.com/movies',
+    headers=headers,
+    json=data
+)
+movie = response.json()
+print(movie)
+```
+</CodeGroup>
+
+## Example Response
+
+```json
+{
+  "imdbId": "tt1234567",
+  "title": "The Matrix",
+  "year": "1999",
+  "type": "movie",
+  "rated": null,
+  "released": "1999-03-31T00:00:00.000Z",
+  "runtime": "136 min",
+  "plot": "A computer hacker learns from mysterious rebels about the true nature of his reality.",
+  "language": "English",
+  "country": "USA",
+  "awards": "Won 4 Oscars",
+  "poster": "https://example.com/poster.jpg",
+  "createdAt": "2024-01-15T10:30:00.000Z",
+  "genres": [
+    {
+      "imdbId": "tt1234567",
+      "genre": "Ciencia_ficcion"
+    },
+    {
+      "imdbId": "tt1234567",
+      "genre": "Thriller"
+    }
+  ],
+  "prices": [
+    {
+      "id": 1,
+      "movieId": "tt1234567",
+      "transactionType": "RENT",
+      "quality": "p1080",
+      "price": 3.99
+    },
+    {
+      "id": 2,
+      "movieId": "tt1234567",
+      "transactionType": "BUY",
+      "quality": "p4k",
+      "price": 14.99
+    }
+  ]
+}
+```
+
+## Error Responses
+
+<ResponseField name="statusCode" type="number">
+  HTTP status code
+</ResponseField>
+
+<ResponseField name="message" type="string | array">
+  Error message description or array of validation errors
+</ResponseField>
+
+### 400 Bad Request
+
+```json
+{
+  "statusCode": 400,
+  "message": [
+    "imdbId should not be empty",
+    "title should not be empty",
+    "genres must be an array"
+  ],
+  "error": "Bad Request"
+}
+```
+
+### 401 Unauthorized
+
+```json
+{
+  "statusCode": 401,
+  "message": "Unauthorized"
+}
+```
+
+### 403 Forbidden
+
+```json
+{
+  "statusCode": 403,
+  "message": "Forbidden resource"
+}
+```
+
+### 409 Conflict
+
+```json
+{
+  "statusCode": 409,
+  "message": "Movie with this IMDB ID already exists"
+}
+```

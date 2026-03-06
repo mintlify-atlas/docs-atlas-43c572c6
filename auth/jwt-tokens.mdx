@@ -1,0 +1,410 @@
+---
+title: 'JWT Tokens'
+description: 'Understanding JWT token structure, validation, and lifecycle in Renta Pelis Backend'
+---
+
+## Overview
+
+Renta Pelis Backend uses JSON Web Tokens (JWT) for stateless authentication. Tokens are signed using the HS256 algorithm and contain user identity and authorization information.
+
+## Token Configuration
+
+JWT tokens are configured in the `AuthModule` using environment variables:
+
+```typescript auth.module.ts
+JwtModule.registerAsync({
+  global: true,
+  inject: [ConfigService],
+  useFactory: (config: ConfigService) => ({
+    secret: config.get<string>('JWT_SECRET'),
+    signOptions: {
+      expiresIn: Number(config.get('JWT_EXPIRES_IN') || 3600),
+    },
+  }),
+})
+```
+
+### Environment Variables
+
+<ParamField path="JWT_SECRET" type="string" required>
+  Secret key used to sign JWT tokens. Should be a strong, random string stored securely.
+</ParamField>
+
+<ParamField path="JWT_EXPIRES_IN" type="number" default="3600">
+  Token expiration time in seconds. Default is 3600 (1 hour).
+</ParamField>
+
+<Warning>
+  Always use a strong, unique JWT secret in production. Never commit secrets to version control.
+</Warning>
+
+## Token Structure
+
+### Access Token Payload
+
+Access tokens contain the following claims:
+
+```typescript
+interface JwtPayload {
+  sub: string;      // Subject: User ID (UUID)
+  email: string;    // User email address
+  role: string;     // User role: 'admin' or 'cliente'
+  iat: number;      // Issued at: Unix timestamp
+  exp: number;      // Expires at: Unix timestamp
+}
+```
+
+### Example Token Payload
+
+```json
+{
+  "sub": "550e8400-e29b-41d4-a716-446655440000",
+  "email": "user@example.com",
+  "role": "cliente",
+  "iat": 1709697600,
+  "exp": 1709701200
+}
+```
+
+## Token Generation
+
+Tokens are generated during registration and login:
+
+### During Registration
+
+```typescript auth.service.ts
+async register(newUser: RegisterDto): Promise<responseAuth> {
+  try {
+    const user = await this.usersService.create(newUser);
+    const payload = { 
+      sub: user.user_id, 
+      email: user.email, 
+      role: user.role 
+    };
+    
+    return {
+      accessToken: this.jwtService.sign(payload),
+      user: {
+        id: user.user_id,
+        email: user.email,
+      },
+    };
+  } catch (error) {
+    throw new InternalServerErrorException(
+      `Error al crear el usuario: ${error}`,
+    );
+  }
+}
+```
+
+### During Login
+
+```typescript auth.service.ts
+async login({ email, password }: LoginDto) {
+  const user = await this.usersService.findByEmail(email);
+  
+  if (!user) {
+    throw new UnauthorizedException('Usuario no encontrado');
+  }
+
+  const isPasswordValid = await this.hashingService.compare(
+    password.trim(),
+    user.passwordHash,
+  );
+
+  if (!isPasswordValid) {
+    throw new UnauthorizedException('Contraseña incorrecta');
+  }
+
+  // Create JWT payload
+  const payload = { 
+    sub: user.user_id, 
+    email: user.email, 
+    role: user.role 
+  };
+  
+  const token = await this.jwtService.signAsync(payload);
+
+  return {
+    access_token: token,
+  };
+}
+```
+
+## Token Validation
+
+Tokens are validated by the `AuthGuard` on protected routes:
+
+<Steps>
+  <Step title="Extract Token">
+    The guard extracts the token from the Authorization header:
+    
+    ```typescript auth.guard.ts
+    private extractTokenFromHeader(request: Request): string | undefined {
+      const [type, token] = request.headers.authorization?.split(' ') ?? [];
+      return type === 'Bearer' ? token : undefined;
+    }
+    ```
+  </Step>
+  
+  <Step title="Verify Token">
+    The token is verified using the JWT secret:
+    
+    ```typescript auth.guard.ts
+    try {
+      const payload: JwtPayload = await this.jwtService.verifyAsync(token);
+      request['user'] = payload;
+    } catch {
+      throw new UnauthorizedException();
+    }
+    ```
+  </Step>
+  
+  <Step title="Attach to Request">
+    The decoded payload is attached to the request object for use in route handlers
+  </Step>
+</Steps>
+
+### Token Validation Flow
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant AuthGuard
+    participant JwtService
+    participant RouteHandler
+    
+    Client->>AuthGuard: Request with Bearer token
+    AuthGuard->>AuthGuard: Extract token from header
+    
+    alt Token missing
+        AuthGuard-->>Client: 401 Unauthorized
+    end
+    
+    AuthGuard->>JwtService: Verify token
+    
+    alt Token invalid/expired
+        JwtService-->>AuthGuard: Verification failed
+        AuthGuard-->>Client: 401 Unauthorized
+    end
+    
+    JwtService-->>AuthGuard: Payload
+    AuthGuard->>AuthGuard: Attach user to request
+    AuthGuard->>RouteHandler: Allow access
+    RouteHandler-->>Client: Response
+```
+
+## Using Tokens in Requests
+
+Clients must include the JWT token in the Authorization header:
+
+<CodeGroup>
+
+```bash cURL
+curl -X GET https://api.rentapelis.com/auth/profile \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+```
+
+```javascript JavaScript
+const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...';
+
+const response = await fetch('https://api.rentapelis.com/auth/profile', {
+  headers: {
+    'Authorization': `Bearer ${token}`,
+    'Content-Type': 'application/json'
+  }
+});
+```
+
+```python Python
+import requests
+
+token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+
+response = requests.get(
+    'https://api.rentapelis.com/auth/profile',
+    headers={'Authorization': f'Bearer {token}'}
+)
+```
+
+</CodeGroup>
+
+## Token Expiration
+
+Tokens expire after the time specified in `JWT_EXPIRES_IN` (default: 1 hour).
+
+### Handling Expired Tokens
+
+When a token expires, the API returns a 401 Unauthorized response:
+
+```json
+{
+  "statusCode": 401,
+  "message": "Unauthorized"
+}
+```
+
+Clients should:
+1. Detect the 401 response
+2. Request a new token using refresh token (if implemented)
+3. Retry the original request with the new token
+
+<Note>
+  The current implementation uses access tokens only. For production systems, consider implementing refresh tokens for better security and user experience.
+</Note>
+
+## Refresh Token Flow (Future Enhancement)
+
+While not currently implemented in the auth service, the Session model includes a `refreshToken` field for future implementation:
+
+```prisma schema.prisma
+model Session {
+  id String @id @default(uuid())
+  
+  userId String
+  user   User   @relation(fields: [userId], references: [user_id], onDelete: Cascade)
+  
+  refreshToken String  // For future refresh token implementation
+  
+  userAgent String?
+  ipAddress String?
+  location  String?
+  
+  isActive Boolean @default(true)
+  
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime  @updatedAt
+}
+```
+
+### Recommended Refresh Token Flow
+
+<Steps>
+  <Step title="Issue Refresh Token">
+    When a user logs in, issue both an access token (short-lived) and a refresh token (long-lived)
+  </Step>
+  
+  <Step title="Store Refresh Token">
+    Store the refresh token in the Session table with an expiration date
+  </Step>
+  
+  <Step title="Use Access Token">
+    Client uses the access token for API requests
+  </Step>
+  
+  <Step title="Access Token Expires">
+    When the access token expires, client sends the refresh token to `/auth/refresh`
+  </Step>
+  
+  <Step title="Issue New Access Token">
+    Server validates the refresh token and issues a new access token
+  </Step>
+  
+  <Step title="Rotate Refresh Token">
+    Optionally rotate the refresh token for enhanced security
+  </Step>
+</Steps>
+
+## Security Best Practices
+
+<AccordionGroup>
+  <Accordion title="Use Strong Secrets">
+    Generate JWT secrets using a cryptographically secure random generator:
+    
+    ```bash
+    # Generate a 256-bit secret
+    openssl rand -base64 32
+    ```
+  </Accordion>
+  
+  <Accordion title="Set Appropriate Expiration">
+    Balance security and user experience:
+    - Access tokens: 15 minutes to 1 hour
+    - Refresh tokens: 7 to 30 days
+  </Accordion>
+  
+  <Accordion title="Validate Token Claims">
+    Always validate:
+    - Token signature
+    - Expiration time (exp)
+    - Issuer (iss) if configured
+    - Audience (aud) if configured
+  </Accordion>
+  
+  <Accordion title="Avoid Sensitive Data in Payload">
+    Never include in JWT payload:
+    - Passwords or password hashes
+    - Personal identification numbers
+    - Financial information
+    - Any sensitive personal data
+  </Accordion>
+  
+  <Accordion title="Implement Token Revocation">
+    For critical operations, implement token revocation:
+    - Maintain a blacklist of revoked tokens
+    - Check blacklist during validation
+    - Use refresh token rotation
+  </Accordion>
+</AccordionGroup>
+
+## Debugging Tokens
+
+You can decode JWT tokens (without validating) using online tools or libraries:
+
+### Using jwt.io
+
+Visit [jwt.io](https://jwt.io) and paste your token to view the decoded payload.
+
+### Using Node.js
+
+```javascript
+const jwt = require('jsonwebtoken');
+
+const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...';
+
+// Decode without verification (for debugging only)
+const decoded = jwt.decode(token);
+console.log(decoded);
+
+// Verify and decode
+try {
+  const verified = jwt.verify(token, process.env.JWT_SECRET);
+  console.log(verified);
+} catch (error) {
+  console.error('Token verification failed:', error.message);
+}
+```
+
+<Warning>
+  Never decode tokens without verification in production code. Always use `jwt.verify()` or `jwtService.verifyAsync()`.
+</Warning>
+
+## Common Errors
+
+<ResponseField name="Token no proporcionado" type="401">
+  The Authorization header is missing or malformed. Ensure you include `Bearer <token>` in the Authorization header.
+</ResponseField>
+
+<ResponseField name="Unauthorized" type="401">
+  The token is invalid, expired, or the signature verification failed. Request a new token.
+</ResponseField>
+
+<ResponseField name="JsonWebTokenError" type="401">
+  The token structure is invalid. Ensure you're sending a properly formatted JWT.
+</ResponseField>
+
+<ResponseField name="TokenExpiredError" type="401">
+  The token has expired. Request a new token using your refresh token or by logging in again.
+</ResponseField>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Sessions" icon="clock" href="/auth/sessions">
+    Learn about session management and device tracking
+  </Card>
+  <Card title="Two-Factor Auth" icon="mobile" href="/auth/two-factor">
+    Implement 2FA for enhanced security
+  </Card>
+</CardGroup>

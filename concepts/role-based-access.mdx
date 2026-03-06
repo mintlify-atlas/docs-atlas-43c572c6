@@ -1,0 +1,403 @@
+---
+title: 'Role-Based Access Control'
+description: 'Learn how authentication and authorization work in the Renta Pelis API'
+---
+
+The Renta Pelis Backend implements a **role-based access control (RBAC)** system using NestJS guards and decorators. This ensures that only authorized users can access protected endpoints.
+
+## Role System
+
+### Available Roles
+
+The system defines two roles in the Prisma schema:
+
+```prisma
+enum UserRole {
+  admin
+  cliente
+}
+```
+
+These roles map to the following enum in the application:
+
+```typescript
+// src/auth/enums.ts
+export enum Role {
+  Client = 'cliente',
+  Admin = 'admin',
+}
+```
+
+**Role Definitions:**
+
+- **`admin`**: Full system access including user management, order oversight, and movie catalog administration
+- **`cliente`** (Client): Standard customer access for browsing, purchasing, and managing own orders
+
+<Info>
+By default, new users are assigned the `cliente` role. Only administrators can create other admin accounts.
+</Info>
+
+## Authentication Guard
+
+The `AuthGuard` validates JWT tokens and attaches user information to the request.
+
+### Implementation
+
+```typescript
+// src/auth/guards/auth.guard.ts
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { Request } from 'express';
+import { IS_PUBLIC_KEY } from '../../common/decorators/public.decorator';
+import { Reflector } from '@nestjs/core';
+import { JwtPayload } from '../interfaces';
+
+@Injectable()
+export class AuthGuard implements CanActivate {
+  constructor(
+    private jwtService: JwtService,
+    private reflector: Reflector,
+  ) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request: Request = context.switchToHttp().getRequest();
+
+    // Check if route is public
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    if (isPublic) {
+      return true;
+    }
+
+    // Extract and verify JWT token
+    const token = this.extractTokenFromHeader(request);
+    if (!token) {
+      throw new UnauthorizedException('Token no proporcionado');
+    }
+
+    try {
+      const payload: JwtPayload = await this.jwtService.verifyAsync(token);
+      request['user'] = payload;
+    } catch {
+      throw new UnauthorizedException();
+    }
+    return true;
+  }
+
+  private extractTokenFromHeader(request: Request): string | undefined {
+    const [type, token] = request.headers.authorization?.split(' ') ?? [];
+    return type === 'Bearer' ? token : undefined;
+  }
+}
+```
+
+### How It Works
+
+1. **Public Routes**: If a route is marked with `@Public()`, the guard allows access without authentication
+2. **Token Extraction**: Extracts the JWT from the `Authorization: Bearer <token>` header
+3. **Token Verification**: Validates the token signature and expiration
+4. **User Injection**: Attaches the decoded JWT payload to `request.user`
+
+<Warning>
+The `AuthGuard` must run before the `RolesGuard` to ensure user information is available.
+</Warning>
+
+## Roles Guard
+
+The `RolesGuard` checks if the authenticated user has the required role to access a route.
+
+### Implementation
+
+```typescript
+// src/auth/guards/roles.guard.ts
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { ROLES_KEY } from '../decorators/roles.decorator';
+import { Role } from '../enums';
+import { RequestWithUser } from '../interfaces';
+import { IS_PUBLIC_KEY } from '../../common/decorators/public.decorator';
+
+@Injectable()
+export class RolesGuard implements CanActivate {
+  constructor(private reflector: Reflector) {}
+  
+  canActivate(context: ExecutionContext): boolean {
+    // Check if route is public
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    if (isPublic) {
+      return true;
+    }
+
+    // Get required roles from decorator metadata
+    const roles = this.reflector.getAllAndOverride<Role>(ROLES_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    if (!roles) {
+      return true; // No role requirement, allow access
+    }
+
+    // User exists because AuthGuard ran first
+    const request = context.switchToHttp().getRequest<RequestWithUser>();
+    const { user } = request;
+
+    return roles.includes(user.role);
+  }
+}
+```
+
+### Role Decorator
+
+```typescript
+// src/auth/decorators/roles.decorator.ts
+import { SetMetadata } from '@nestjs/common';
+import { Role } from '../enums';
+
+export const ROLES_KEY = 'roles';
+export const Roles = (roles: Role) => SetMetadata(ROLES_KEY, roles);
+```
+
+## Protecting Routes
+
+### Admin-Only Access
+
+The `UsersController` is restricted to administrators only:
+
+```typescript
+// src/users/users.controller.ts
+import { Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '../auth/guards/auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Role } from '../auth/enums';
+import { Roles } from '../auth/decorators/roles.decorator';
+
+@Controller('users')
+@UseGuards(AuthGuard, RolesGuard)
+@Roles(Role.Admin)
+export class UsersController {
+  constructor(private readonly usersService: UsersService) {}
+
+  @Get()
+  findAll() {
+    return this.usersService.findAll();
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.usersService.findOne(id);
+  }
+
+  @Delete(':id')
+  remove(@Param('id') id: string) {
+    return this.usersService.remove(id);
+  }
+}
+```
+
+<Check>
+**Result**: Only users with `role: "admin"` can access any endpoint in this controller.
+</Check>
+
+### Mixed Access Levels
+
+The `OrdersController` has different role requirements per endpoint:
+
+```typescript
+// src/orders/orders.controller.ts
+import { Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '../auth/guards/auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Role } from '../auth/enums';
+
+@Controller('orders')
+@UseGuards(AuthGuard, RolesGuard)
+export class OrdersController {
+  constructor(private readonly ordersService: OrdersService) {}
+
+  // Clients can create their own orders
+  @Post()
+  @Roles(Role.Client)
+  async create(
+    @ActiveUser() user: UserActiveInterface,
+    @Body() createOrderDto: CreateOrderDto,
+  ) {
+    return this.ordersService.createOrder(user.sub, createOrderDto);
+  }
+
+  // Clients can view their own orders
+  @Get('my-orders')
+  @Roles(Role.Client)
+  async findUserOrders(@ActiveUser() user: UserActiveInterface) {
+    return this.ordersService.findAllUserOrders(user.sub);
+  }
+
+  // Only admins can view all orders
+  @Get()
+  @Roles(Role.Admin)
+  async findAll(@Query('status') status?: OrderStatus) {
+    return this.ordersService.findAll(status);
+  }
+}
+```
+
+## Ownership Guard
+
+For resource-level authorization, the `OwnershipGuard` ensures users can only access their own resources.
+
+### Implementation
+
+```typescript
+// src/orders/guards/ownership.guard.ts
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { CHECK_OWNERSHIP_KEY, OwnershipOptions } from '../decorators/ownership.decorator';
+import { OrdersService } from '../orders.service';
+import { RequestWithUser } from '../../auth/interfaces';
+
+@Injectable()
+export class OwnershipGuard implements CanActivate {
+  constructor(
+    private reflector: Reflector,
+    private ordersService: OrdersService,
+  ) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const options = this.reflector.get<OwnershipOptions>(
+      CHECK_OWNERSHIP_KEY,
+      context.getHandler(),
+    );
+    if (!options) return true;
+
+    const request = context.switchToHttp().getRequest<RequestWithUser>();
+    const user = request.user;
+    const resourceId = request.params[options.paramName] as string;
+
+    if (!user || !resourceId) return false;
+
+    // Fetch the resource and verify ownership
+    const resource = await this.ordersService.findOne(resourceId);
+
+    if (!resource) {
+      throw new NotFoundException('Recurso no encontrado');
+    }
+
+    if (resource.userId !== user.sub) {
+      throw new ForbiddenException('No tienes permiso sobre este recurso');
+    }
+
+    return true;
+  }
+}
+```
+
+### Usage Example
+
+```typescript
+@Get(':id')
+@Roles(Role.Client)
+@UseGuards(OwnershipGuard)
+@CheckOwnership({ resource: 'order', paramName: 'id' })
+findOne(@Param('id') id: string) {
+  return this.ordersService.findOne(id);
+}
+```
+
+**Flow:**
+1. `AuthGuard` verifies JWT and adds user to request
+2. `RolesGuard` checks if user has `Client` role
+3. `OwnershipGuard` verifies the order belongs to the requesting user
+
+<Warning>
+Admins bypass ownership checks in most implementations. Adjust guard logic if admins need global access.
+</Warning>
+
+## Guard Execution Order
+
+Guards execute in the order they are declared:
+
+```typescript
+@UseGuards(AuthGuard, RolesGuard, OwnershipGuard)
+```
+
+**Execution Flow:**
+1. **AuthGuard** → Validates JWT, attaches user to request
+2. **RolesGuard** → Checks user role against required roles
+3. **OwnershipGuard** → Verifies resource ownership
+
+<Check>
+This order is critical because each guard depends on data from the previous one.
+</Check>
+
+## Making Routes Public
+
+Use the `@Public()` decorator to bypass authentication:
+
+```typescript
+import { Public } from '../common/decorators/public.decorator';
+
+@Controller('auth')
+export class AuthController {
+  @Post('login')
+  @Public()
+  async login(@Body() loginDto: LoginDto) {
+    return this.authService.login(loginDto);
+  }
+
+  @Post('register')
+  @Public()
+  async register(@Body() registerDto: RegisterDto) {
+    return this.authService.register(registerDto);
+  }
+}
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always apply AuthGuard before RolesGuard">
+    The RolesGuard depends on user information from AuthGuard. Apply them in the correct order.
+  </Accordion>
+
+  <Accordion title="Use controller-level guards for consistent protection">
+    Apply guards at the controller level to protect all routes, then use @Public() for exceptions.
+  </Accordion>
+
+  <Accordion title="Validate ownership for user-specific resources">
+    Always check resource ownership to prevent unauthorized access to other users' data.
+  </Accordion>
+
+  <Accordion title="Test authorization logic thoroughly">
+    Write tests to verify that guards correctly allow/deny access based on roles and ownership.
+  </Accordion>
+</AccordionGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Authentication Endpoints" icon="key" href="/api/auth/register">
+    Learn about login, register, and token refresh
+  </Card>
+  <Card title="Error Handling" icon="triangle-exclamation" href="/concepts/error-handling">
+    Understand authentication and authorization errors
+  </Card>
+</CardGroup>
